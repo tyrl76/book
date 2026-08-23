@@ -1,0 +1,22 @@
+.env
+.DS_Store
+*.log
+.idea/
+.vscode/
+
+# Go
+bin/
+coverage.out
+.cache/
+.gocache/
+.pnpm-store/
+
+# Expo / Node
+apps/mobile/.expo/
+apps/mobile/dist/
+apps/mobile/node_modules/
+apps/mobile/.env.local
+
+# Local archives and endpoint-protection wrappers
+*.zip
+*.exs

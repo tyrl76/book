@@ -1,0 +1,48 @@
+INSERT INTO users (id) VALUES
+    ('11111111-1111-4111-8111-111111111111'),
+    ('22222222-2222-4222-8222-222222222222'),
+    ('33333333-3333-4333-8333-333333333333')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO profiles (user_id, nickname, bio) VALUES
+    ('11111111-1111-4111-8111-111111111111', '민서', '천천히 오래 읽어요'),
+    ('22222222-2222-4222-8222-222222222222', '지우', '출근길 독서 중'),
+    ('33333333-3333-4333-8333-333333333333', '현우', '소설과 에세이를 좋아해요')
+ON CONFLICT (user_id) DO NOTHING;
+
+INSERT INTO friendships (id, requester_id, addressee_id, user_low, user_high, status, accepted_at) VALUES
+    ('f1111111-1111-4111-8111-111111111111', '11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', '11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', 'accepted', now()),
+    ('f2222222-2222-4222-8222-222222222222', '11111111-1111-4111-8111-111111111111', '33333333-3333-4333-8333-333333333333', '11111111-1111-4111-8111-111111111111', '33333333-3333-4333-8333-333333333333', 'accepted', now())
+ON CONFLICT (user_low, user_high) DO NOTHING;
+
+INSERT INTO works (id, title, author, cover_color) VALUES
+    ('c1111111-1111-4111-8111-111111111111', '아무튼, 메모', '정혜윤', '#B65D48'),
+    ('c2222222-2222-4222-8222-222222222222', '불편한 편의점', '김호연', '#406B62'),
+    ('c3333333-3333-4333-8333-333333333333', '물고기는 존재하지 않는다', '룰루 밀러', '#304D75')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO editions (id, work_id, isbn13, publisher, page_count) VALUES
+    ('d1111111-1111-4111-8111-111111111111', 'c1111111-1111-4111-8111-111111111111', '9788994040803', '위고', 272),
+    ('d2222222-2222-4222-8222-222222222222', 'c2222222-2222-4222-8222-222222222222', '9791161571188', '나무옆의자', 268),
+    ('d3333333-3333-4333-8333-333333333333', 'c3333333-3333-4333-8333-333333333333', '9791189327156', '곰출판', 300)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO reading_runs (id, user_id, edition_id, status, progress_basis, current_value, total_value, normalized_progress, visibility, started_at) VALUES
+    ('a1111111-1111-4111-8111-111111111111', '11111111-1111-4111-8111-111111111111', 'd1111111-1111-4111-8111-111111111111', 'reading', 'pages', 86, 272, 3162, 'friends', now() - interval '5 days'),
+    ('a2222222-2222-4222-8222-222222222222', '22222222-2222-4222-8222-222222222222', 'd2222222-2222-4222-8222-222222222222', 'reading', 'pages', 134, 268, 5000, 'friends', now() - interval '8 days'),
+    ('a3333333-3333-4333-8333-333333333333', '33333333-3333-4333-8333-333333333333', 'd3333333-3333-4333-8333-333333333333', 'reading', 'pages', 225, 300, 7500, 'friends', now() - interval '12 days')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO progress_entries (id, reading_run_id, client_operation_id, previous_value, new_value, previous_normalized_progress, new_normalized_progress, source, note, recorded_at) VALUES
+    ('e2222222-2222-4222-8222-222222222222', 'a2222222-2222-4222-8222-222222222222', '92222222-2222-4222-8222-222222222222', 110, 134, 4104, 5000, 'manual', '이제야 서로의 마음이 조금 보이는 것 같아.', now() - interval '2 hours'),
+    ('e3333333-3333-4333-8333-333333333333', 'a3333333-3333-4333-8333-333333333333', '93333333-3333-4333-8333-333333333333', 200, 225, 6667, 7500, 'manual', NULL, now() - interval '1 day')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO feed_events (id, actor_id, reading_run_id, progress_entry_id, type, visibility, note, occurred_at) VALUES
+    ('b2222222-2222-4222-8222-222222222222', '22222222-2222-4222-8222-222222222222', 'a2222222-2222-4222-8222-222222222222', 'e2222222-2222-4222-8222-222222222222', 'milestone_50', 'friends', '이제야 서로의 마음이 조금 보이는 것 같아.', now() - interval '2 hours'),
+    ('b3333333-3333-4333-8333-333333333333', '33333333-3333-4333-8333-333333333333', 'a3333333-3333-4333-8333-333333333333', 'e3333333-3333-4333-8333-333333333333', 'milestone_75', 'friends', NULL, now() - interval '1 day')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO reactions (feed_event_id, user_id) VALUES
+    ('b2222222-2222-4222-8222-222222222222', '33333333-3333-4333-8333-333333333333')
+ON CONFLICT DO NOTHING;

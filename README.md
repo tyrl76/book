@@ -1,0 +1,115 @@
+# 책결 (가칭)
+
+> 친한 사람들과 서로의 독서 근황을 나누는 가장 가벼운 방법.
+
+책결은 친구·연인·가족·소그룹이 서로 다른 책을 읽으면서도 시작, 진척, 완독과 짧은 생각을 안전하게 나누는 모바일 우선 소셜 독서 앱이다. 현재 저장소에는 Go API·Worker, PostgreSQL 스키마, Expo 앱과 로컬 실행 환경이 함께 들어 있다. `책결`은 가칭이며 출시 전에 상표·앱 이름·도메인을 확정해야 한다.
+
+## 현재 구현
+
+- Expo 57 + React Native + TypeScript 앱, 시스템·라이트·다크 테마
+- Supabase PKCE 로그인 UI와 Go JWT/JWKS 검증, 로컬 개발 인증
+- Kakao 도서 검색·ISBN 카메라 스캔·직접 등록과 로컬 폴백
+- 종이책·전자책·오디오북, 다권 책장, 5개 독서 상태와 재독 회차
+- 진척·메모·타이머·과거 기록, 네이티브 SQLite 오프라인 큐와 멱등 재전송
+- 친구 초대·수락·삭제·차단, 비공개 그룹·초대·그룹 한정 공유
+- 시작·25·50·75·완독 피드, 응원, 위치 기반 스포일러 댓글
+- 책별 공개 범위와 진척 정밀도, 신고, 프로필, 통계, 목표·주간 리포트
+- Expo 푸시 토큰·알림 설정·전달 큐·재시도 Worker
+- 내 데이터 JSON 내보내기와 Supabase Auth·PostgreSQL 계정 삭제 재시도
+- 운영자 신고 콘솔, 콘텐츠 숨김·제재·복원과 감사 로그
+
+기능별 실제 완료 범위와 남은 작업은 [구현 현황](docs/IMPLEMENTATION_STATUS.md)을 기준으로 한다. Kakao 도서 검색에는 전체 페이지 수가 없을 수 있어 사용자가 쪽수·퍼센트·오디오 시간을 선택한다. 웹은 개발·QA용이며 첫 출시는 iOS/Android를 우선한다.
+
+## 로컬 실행
+
+필수 도구는 Go 1.25+, Node.js, pnpm, Docker다. 저장소 루트에서 다음 세 프로세스를 각각 실행한다.
+
+```bash
+docker compose up -d db
+go run ./cmd/api
+```
+
+```bash
+go run ./cmd/worker
+```
+
+```bash
+cd apps/mobile
+pnpm install
+pnpm start
+```
+
+Expo 터미널에서 `w`를 누르면 웹, `a`는 Android, `i`는 iOS가 열린다. 기본 주소는 앱 `http://localhost:8081`, API 상태 확인 `http://localhost:8080/healthz`다. Android 에뮬레이터는 API에 `10.0.2.2:8080`, iOS 시뮬레이터는 `127.0.0.1:8080`으로 접근한다.
+
+실제 기기는 `apps/mobile/.env.local`에 개발 PC의 LAN 주소를 지정한다.
+
+```dotenv
+EXPO_PUBLIC_API_URL=http://192.168.0.10:8080
+```
+
+개발 PostgreSQL은 호스트 `55432`를 사용한다. 초기 컨테이너에는 `migrations/000001`부터 `000005`와 개발 시드가 순서대로 적용된다. 기존 볼륨에 새 마이그레이션을 반영할 때는 각 SQL을 운영 절차에 따라 직접 적용하고, 데이터가 있는 볼륨을 단순 삭제하지 않는다.
+
+## 외부 서비스 연결
+
+Supabase 없이 실행하면 앱과 API가 시드 개발 사용자로 동작한다. 운영 인증을 연결할 때 서버에 다음 값을 주입한다.
+
+```dotenv
+ALLOW_DEV_AUTH=false
+SUPABASE_URL=https://PROJECT_REF.supabase.co
+SUPABASE_JWT_ISSUER=https://PROJECT_REF.supabase.co/auth/v1
+SUPABASE_JWKS_URL=https://PROJECT_REF.supabase.co/auth/v1/.well-known/jwks.json
+SUPABASE_SERVICE_ROLE_KEY=서버_전용_service_role_키
+KAKAO_REST_API_KEY=서버용_REST_API_키
+EXPO_PUSH_URL=https://exp.host/--/api/v2/push/send
+ADMIN_API_KEY=32자_이상의_운영자_비밀
+PUBLIC_APP_URL=https://links.example.com
+```
+
+모바일 `apps/mobile/.env.local`에는 공개 가능한 값만 둔다.
+
+```dotenv
+EXPO_PUBLIC_API_URL=https://api.example.com
+EXPO_PUBLIC_SUPABASE_URL=https://PROJECT_REF.supabase.co
+EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+EXPO_PUBLIC_APP_LINK_DOMAIN=links.example.com
+```
+
+Supabase에서 카카오·Google·Apple 공급자와 `bookgyeol://auth/callback`을 설정한다. Expo/EAS projectId와 APNs·FCM 자격 증명이 있어야 실제 기기 푸시 토큰이 발급된다. `service_role` 키, Kakao REST API 키, DB 접속 문자열은 앱 번들에 넣지 않는다. `EXPO_PUSH_URL`이 비어 있으면 Worker는 전달 대상을 큐에 만들지만 외부로 발송하지 않는다.
+
+커스텀 스킴 OAuth, App Links와 푸시는 Expo Go가 아닌 development build 또는 배포 빌드에서 검증한다. `ALLOW_DEV_AUTH=false`인데 Supabase URL·서비스 역할 키·32자 이상 운영자 키가 없으면 API가 시작 단계에서 실패한다. 계정 삭제는 Supabase Auth 호출이 일시 실패하면 202를 반환하고 Worker가 재시도하며, 삭제 요청 시점부터 해당 사용자 API와 푸시를 차단한다.
+
+로컬 운영 콘솔은 `http://localhost:8080/admin`이다. `ADMIN_API_KEY`를 브라우저 탭 세션에만 보관하며, 운영에서는 이 경로를 IAP/SSO 또는 제한된 네트워크 뒤에 둔다. HTTPS 초대 링크에 필요한 도메인 파일은 `deploy/app-links` 템플릿을 사용한다.
+
+전체 계정·인프라·스토어 작업은 [외부·인프라 체크리스트](docs/EXTERNAL_SETUP.md)에 정리돼 있다.
+
+## 검증
+
+```bash
+go test ./...
+cd apps/mobile
+pnpm typecheck
+pnpm lint
+pnpm exec expo export --platform web
+```
+
+웹 빌드는 정적 번들 검증용이다. 웹에서는 네이티브 푸시 등록을 비활성화하고, Expo SQLite의 OPFS 다중 탭 충돌을 피하기 위해 브라우저 `localStorage` 캐시 어댑터를 사용한다.
+
+## 문서
+
+- [최종 제품 기획서](docs/PRODUCT_PLAN_V2.md): 시장 비교, 사용자, 정책, 화면, 지표, 출시 계획
+- [구현 현황](docs/IMPLEMENTATION_STATUS.md): 실행 가능한 기능, 외부 연결 기능, 후속 로드맵
+- [외부·인프라 체크리스트](docs/EXTERNAL_SETUP.md): 소유자가 직접 해야 하는 베타·출시 준비
+- [기술 설계](docs/TECHNICAL_DESIGN.md): 아키텍처, 데이터 모델, 보안, 배포 구조
+- [OpenAPI](api/openapi.yaml): 현재 Go 서버 REST 계약
+- [초기 제품 설계](docs/PRODUCT_SPEC.md): v1 의사결정 기록
+
+## 제품 방향
+
+- 한국 모바일 사용자를 먼저 대상으로 한다.
+- 일방향 팔로우보다 상호 수락한 친구와 2~20명 소그룹을 우선한다.
+- 전자책 뷰어를 만들지 않고 종이책·전자책·오디오북의 과정을 기록한다.
+- 원시 업데이트를 모두 노출하지 않고 시작·25·50·75·완독 이벤트를 피드로 만든다.
+- 메모는 기본 비공개이며, 친구·특정 그룹·전체 공개를 책별로 선택한다.
+- 같은 책의 대화는 상대가 해당 지점에 도달하기 전까지 잠근다.
+
+핵심 성공 조건은 신규 사용자가 첫날 책 한 권과 친구 한 명을 연결하고, 7일 안에 양쪽 모두 진척을 기록한 뒤 상대 기록에 한 번 이상 반응하는 것이다.
