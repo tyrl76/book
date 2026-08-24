@@ -12,12 +12,30 @@ function appLinkDomain(): string {
   }
 }
 
+function optionalEnvironmentValue(name: string): string {
+  return (process.env[name] ?? '').trim();
+}
+
 export default ({ config }: ConfigContext): ExpoConfig => {
   const domain = appLinkDomain();
+  const easProjectID = optionalEnvironmentValue('EAS_PROJECT_ID');
+  const expoOwner = optionalEnvironmentValue('EXPO_OWNER');
   const baseConfig: ExpoConfig = {
     ...config,
     name: config.name ?? '책결',
     slug: config.slug ?? 'bookgyeol',
+    ...(expoOwner ? { owner: expoOwner } : {}),
+    extra: {
+      ...config.extra,
+      ...(easProjectID
+        ? {
+            eas: {
+              ...(typeof config.extra?.eas === 'object' ? config.extra.eas : {}),
+              projectId: easProjectID,
+            },
+          }
+        : {}),
+    },
   };
   if (!domain) return baseConfig;
 

@@ -1,0 +1,15 @@
+.git
+.github
+.gocache
+.pnpm-store
+.env
+.env.*
+!.env.example
+*.exs
+*.log
+*.zip
+apps
+bin
+coverage.out
+deploy
+docs

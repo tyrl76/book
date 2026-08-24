@@ -94,11 +94,26 @@ pnpm exec expo export --platform web
 
 웹 빌드는 정적 번들 검증용이다. 웹에서는 네이티브 푸시 등록을 비활성화하고, Expo SQLite의 OPFS 다중 탭 충돌을 피하기 위해 브라우저 `localStorage` 캐시 어댑터를 사용한다.
 
+## 배포 파이프라인
+
+모든 PR과 `main` push에서 Go 테스트·DB migration·Expo 정적 검증·production 컨테이너 빌드를 수행한다. staging은 CI 성공 후 자동 배포할 수 있고, production 서버와 EAS 모바일 빌드·제출은 GitHub Environment 승인 뒤 수동 실행한다.
+
+```bash
+# 운영 이미지와 동일한 로컬 빌드
+docker build -t bookgyeol:local .
+
+# 빈 PostgreSQL에 순서대로 migration 적용
+DATABASE_URL=postgres://... go run ./cmd/migrate
+```
+
+배포 흐름, GitHub secret/variable, Fly.io, EAS, 스토어 최초 설정과 복구 절차는 [배포 파이프라인](docs/DEPLOYMENT_PIPELINE.md)을 따른다.
+
 ## 문서
 
 - [최종 제품 기획서](docs/PRODUCT_PLAN_V2.md): 시장 비교, 사용자, 정책, 화면, 지표, 출시 계획
 - [구현 현황](docs/IMPLEMENTATION_STATUS.md): 실행 가능한 기능, 외부 연결 기능, 후속 로드맵
 - [외부·인프라 체크리스트](docs/EXTERNAL_SETUP.md): 소유자가 직접 해야 하는 베타·출시 준비
+- [배포 파이프라인](docs/DEPLOYMENT_PIPELINE.md): CI/CD, 환경별 배포, secret, migration, 복구 절차
 - [기술 설계](docs/TECHNICAL_DESIGN.md): 아키텍처, 데이터 모델, 보안, 배포 구조
 - [OpenAPI](api/openapi.yaml): 현재 Go 서버 REST 계약
 - [초기 제품 설계](docs/PRODUCT_SPEC.md): v1 의사결정 기록

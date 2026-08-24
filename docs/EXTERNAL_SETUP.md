@@ -1,8 +1,10 @@
 # 책결 외부·인프라 작업 체크리스트
 
-기준일: 2026-08-21
+기준일: 2026-08-24
 
 코드 저장소 밖에서 소유자가 직접 만들거나 승인해야 하는 작업이다. `필수` 항목이 끝나기 전에는 공개 베타로 배포하지 않는다.
+
+CI/CD 코드, 서버 이미지, migration runner, Fly.io 프로세스 설정과 EAS build profile은 구현됐다. 실제 배포를 활성화하려면 [배포 파이프라인](DEPLOYMENT_PIPELINE.md)의 GitHub Environment와 외부 계정을 먼저 연결한다.
 
 ## 1. 공개 베타 차단 항목
 
@@ -61,6 +63,8 @@ EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 - [ ] Worker를 1개 이상 상시 실행하고 실패 전달 큐를 경보로 연결한다.
 - [ ] `ALLOWED_ORIGINS`를 실제 웹 도메인만 포함하도록 제한한다.
 - [ ] DB 연결 문자열·OAuth 키·카탈로그 키를 저장소가 아닌 비밀 관리자에서 주입한다.
+- [ ] Fly.io staging·production 앱과 앱별 deploy token을 만들고 API·Worker를 각각 1대 이상 유지한다.
+- [ ] GitHub `staging`·`production` Environment에 Fly 앱 이름, health URL, deploy token을 등록한다.
 
 ```dotenv
 DATABASE_URL=postgres://...
@@ -79,6 +83,8 @@ ADMIN_API_KEY=32자_이상의_무작위_값
 - [ ] 서버 Worker에 Expo Push API 주소를 설정한다.
 - [ ] 개발 빌드와 운영 빌드의 실제 기기에서 권한 거절·허용·토큰 갱신·알림 탭 이동을 시험한다.
 - [ ] Expo push receipt 조회 잡을 추가하고 `DeviceNotRegistered` 토큰을 정리한다.
+- [ ] GitHub `mobile-preview`·`mobile-production` Environment에 Expo token, owner, EAS project ID를 등록한다.
+- [ ] 플랫폼별 최초 EAS build를 대화형으로 한 번 실행해 서명 자격 증명을 만든다.
 
 ```dotenv
 EXPO_PUSH_URL=https://exp.host/--/api/v2/push/send
@@ -119,7 +125,9 @@ HTTPS 폴백이 없으면 앱 미설치 사용자는 초대를 열 수 없다.
 - [ ] 아이콘, 스플래시, 스크린샷, 미리보기, 한국어 설명, 지원 URL을 준비한다.
 - [ ] 내부 테스트 → 비공개 베타 → 단계적 출시 순으로 배포한다.
 - [ ] OAuth와 계정 삭제를 심사자가 재현할 수 있는 테스트 계정을 제공한다.
-- [ ] EAS Build/Submit 파이프라인과 버전·빌드 번호 증가 규칙을 만든다.
+- [x] EAS Build/Submit 파이프라인과 원격 빌드 번호 자동 증가 규칙을 구현한다.
+- [ ] App Store Connect numeric app ID와 Google/Apple 제출 자격 증명을 EAS에 연결한다.
+- [ ] GitHub production Environment에 required reviewer를 지정한다.
 
 ## 3. 관측·보안·운영 권장 항목
 

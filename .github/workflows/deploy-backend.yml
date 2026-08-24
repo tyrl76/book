@@ -1,0 +1,70 @@
+name: Deploy backend
+
+on:
+  workflow_run:
+    workflows: [CI]
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment environment
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+      ref:
+        description: Git ref or commit to deploy
+        required: true
+        default: main
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      (github.event_name == 'workflow_dispatch') ||
+      (github.event.workflow_run.conclusion == 'success' && vars.ENABLE_STAGING_DEPLOY == 'true')
+    name: Deploy ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      FLY_APP_NAME: ${{ vars.FLY_APP_NAME }}
+      API_HEALTH_URL: ${{ vars.API_HEALTH_URL }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.workflow_run.head_sha }}
+      - name: Validate deployment configuration
+        shell: bash
+        run: |
+          [[ -n "$FLY_API_TOKEN" ]] || { echo "FLY_API_TOKEN is not configured"; exit 1; }
+          [[ -n "$FLY_APP_NAME" ]] || { echo "FLY_APP_NAME is not configured"; exit 1; }
+          [[ -n "$API_HEALTH_URL" ]] || { echo "API_HEALTH_URL is not configured"; exit 1; }
+          [[ "$API_HEALTH_URL" == https://* ]] || { echo "API_HEALTH_URL must use HTTPS"; exit 1; }
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy API, Worker, and migrations
+        run: flyctl deploy --remote-only --config deploy/fly/fly.toml --app "$FLY_APP_NAME"
+      - name: Verify API health
+        shell: bash
+        run: curl --fail --silent --show-error --retry 10 --retry-delay 6 --retry-all-errors "$API_HEALTH_URL/healthz"
+
+  disabled-notice:
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      vars.ENABLE_STAGING_DEPLOY != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Explain staging gate
+        run: echo "CI passed. Set repository variable ENABLE_STAGING_DEPLOY=true after staging infrastructure is ready."

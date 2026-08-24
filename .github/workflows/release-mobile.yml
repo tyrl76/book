@@ -1,0 +1,88 @@
+name: Release mobile
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: EAS build profile
+        required: true
+        default: preview
+        type: choice
+        options:
+          - preview
+          - production
+      platform:
+        description: Target platform
+        required: true
+        default: all
+        type: choice
+        options:
+          - android
+          - ios
+          - all
+      submit:
+        description: Submit production build to the store testing track
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-${{ inputs.profile }}-${{ inputs.platform }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: EAS ${{ inputs.profile }} / ${{ inputs.platform }}
+    runs-on: ubuntu-latest
+    environment:
+      name: mobile-${{ inputs.profile }}
+    defaults:
+      run:
+        working-directory: apps/mobile
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EAS_PROJECT_ID: ${{ vars.EAS_PROJECT_ID }}
+      EXPO_OWNER: ${{ vars.EXPO_OWNER }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.17.1
+          cache: pnpm
+          cache-dependency-path: apps/mobile/pnpm-lock.yaml
+      - name: Validate release request
+        shell: bash
+        run: |
+          [[ -n "$EXPO_TOKEN" ]] || { echo "EXPO_TOKEN is not configured"; exit 1; }
+          [[ -n "$EAS_PROJECT_ID" ]] || { echo "EAS_PROJECT_ID is not configured"; exit 1; }
+          if [[ "${{ inputs.submit }}" == "true" && "${{ inputs.profile }}" != "production" ]]; then
+            echo "Store submission is only allowed for the production profile"
+            exit 1
+          fi
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Validate app
+        run: |
+          pnpm typecheck
+          pnpm lint
+      - name: Setup Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - name: Trigger EAS build
+        shell: bash
+        run: |
+          args=(build --platform "${{ inputs.platform }}" --profile "${{ inputs.profile }}" --non-interactive)
+          if [[ "${{ inputs.submit }}" == "true" ]]; then
+            args+=(--auto-submit)
+          else
+            args+=(--no-wait)
+          fi
+          eas "${args[@]}"

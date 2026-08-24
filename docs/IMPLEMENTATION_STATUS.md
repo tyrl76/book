@@ -39,7 +39,7 @@
 | 운영 데이터 저장 | PostgreSQL 17 마이그레이션 구현 | 관리형 PostgreSQL, 백업·PITR, 비밀 관리 |
 | 실제 푸시 발송 | Expo 전달 어댑터와 재시도 구현 | EAS projectId, APNs/FCM 자격 증명, `EXPO_PUSH_URL` |
 | 초대 링크 웹 폴백 | HTTPS 초대 URL 생성, iOS/Android 연결 설정, 배포 파일 템플릿 | 도메인, Apple Team ID, Android 서명 지문, `.well-known` 파일 배포 |
-| 앱 배포 | iOS/Android 식별자와 Expo 설정 구현 | Apple/Google 개발자 계정, 서명·스토어 심사 |
+| 앱 배포 | iOS/Android 식별자, EAS profile, 승인형 GitHub Actions Build/Submit 구현 | Expo·Apple·Google 개발자 계정, 최초 서명, 스토어 심사 |
 | 완전한 계정 삭제 | 서버 전용 Supabase Admin 호출과 재시도 구현 | 서비스 역할 키를 비밀 저장소에 주입하고 스테이징 삭제 시험 |
 | 신고 운영 | `/admin` 콘솔, 조치 API와 감사 로그 구현 | 강한 운영자 키·접근망, 담당자, 처리 SLA와 이의제기 정책 |
 
