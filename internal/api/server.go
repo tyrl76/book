@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -115,6 +116,7 @@ type Options struct {
 	AdminAPIKey      string
 	PublicAppURL     string
 	Logger           *slog.Logger
+	AdminLogBuffer   *AdminLogBuffer
 }
 
 type Server struct {
@@ -129,12 +131,18 @@ type Server struct {
 	adminAPIKey      string
 	publicAppURL     string
 	logger           *slog.Logger
+	adminLogs        *AdminLogBuffer
+	startedAt        time.Time
 }
 
 func NewServer(store Store, options Options) http.Handler {
 	logger := options.Logger
 	if logger == nil {
 		logger = slog.Default()
+	}
+	adminLogs := options.AdminLogBuffer
+	if adminLogs == nil {
+		adminLogs = NewAdminLogBuffer(1000)
 	}
 
 	server := &Server{
@@ -149,6 +157,8 @@ func NewServer(store Store, options Options) http.Handler {
 		adminAPIKey:      strings.TrimSpace(options.AdminAPIKey),
 		publicAppURL:     strings.TrimRight(strings.TrimSpace(options.PublicAppURL), "/"),
 		logger:           logger,
+		adminLogs:        adminLogs,
+		startedAt:        time.Now(),
 	}
 	for _, origin := range options.AllowedOrigins {
 		server.allowedOrigins[origin] = struct{}{}
@@ -202,6 +212,9 @@ func NewServer(store Store, options Options) http.Handler {
 	mux.HandleFunc("DELETE /v1/me/reading-presence", server.auth(server.stopReadingPresence))
 	mux.HandleFunc("GET /v1/me/weekly-report", server.auth(server.getWeeklyReport))
 	mux.HandleFunc("GET /admin", server.adminConsole)
+	mux.HandleFunc("GET /v1/admin/overview", server.adminAuth(server.getAdminOverview))
+	mux.HandleFunc("GET /v1/admin/logs", server.adminAuth(server.listAdminLogs))
+	mux.HandleFunc("GET /v1/admin/logs/stream", server.adminAuth(server.streamAdminLogs))
 	mux.HandleFunc("GET /v1/admin/reports", server.adminAuth(server.listAdminReports))
 	mux.HandleFunc("PATCH /v1/admin/reports/{reportID}", server.adminAuth(server.resolveAdminReport))
 	mux.HandleFunc("POST /v1/admin/hidden-targets/{targetType}/{targetID}/restore", server.adminAuth(server.restoreAdminTarget))
@@ -417,6 +430,7 @@ func (s *Server) recoverPanic(next http.Handler) http.Handler {
 		defer func() {
 			if recovered := recover(); recovered != nil {
 				s.logger.Error("request panic", "panic", recovered)
+				s.adminLogs.Append(AdminLogEntry{Level: "error", Message: "request panic", Method: request.Method, Path: request.URL.Path})
 				writeError(response, http.StatusInternalServerError, "internal_error", "서버 오류가 발생했습니다")
 			}
 		}()
@@ -427,14 +441,71 @@ func (s *Server) recoverPanic(next http.Handler) http.Handler {
 func (s *Server) logRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		startedAt := time.Now()
-		next.ServeHTTP(response, request)
-		s.logger.Info("http request", "method", request.Method, "path", request.URL.Path, "duration", time.Since(startedAt))
+		capture := &responseCapture{ResponseWriter: response}
+		next.ServeHTTP(capture, request)
+		duration := time.Since(startedAt)
+		status := capture.status
+		if status == 0 {
+			status = http.StatusOK
+		}
+		s.logger.Info("http request", "method", request.Method, "path", request.URL.Path, "status", status, "bytes", capture.bytes, "duration", duration)
+		if request.URL.Path != "/v1/admin/logs/stream" {
+			level := "info"
+			if status >= http.StatusInternalServerError {
+				level = "error"
+			} else if status >= http.StatusBadRequest {
+				level = "warn"
+			}
+			s.adminLogs.Append(AdminLogEntry{
+				Level: level, Message: "http request", Method: request.Method, Path: request.URL.Path,
+				Status: status, DurationMS: duration.Milliseconds(), ResponseBytes: capture.bytes,
+			})
+		}
 	})
 }
 
 func (s *Server) internalError(response http.ResponseWriter, err error) {
 	s.logger.Error("request failed", "error", err)
+	s.adminLogs.Append(AdminLogEntry{Level: "error", Message: "request failed", Detail: sanitizeLogDetail(err.Error())})
 	writeError(response, http.StatusInternalServerError, "internal_error", "서버 오류가 발생했습니다")
+}
+
+type responseCapture struct {
+	http.ResponseWriter
+	status int
+	bytes  int64
+}
+
+func (capture *responseCapture) WriteHeader(status int) {
+	if capture.status != 0 {
+		return
+	}
+	capture.status = status
+	capture.ResponseWriter.WriteHeader(status)
+}
+
+func (capture *responseCapture) Write(body []byte) (int, error) {
+	if capture.status == 0 {
+		capture.WriteHeader(http.StatusOK)
+	}
+	written, err := capture.ResponseWriter.Write(body)
+	capture.bytes += int64(written)
+	return written, err
+}
+
+func (capture *responseCapture) Unwrap() http.ResponseWriter { return capture.ResponseWriter }
+
+func (capture *responseCapture) Flush() {
+	if capture.status == 0 {
+		capture.WriteHeader(http.StatusOK)
+	}
+	_ = http.NewResponseController(capture.ResponseWriter).Flush()
+}
+
+func runtimeSnapshot() (string, int, uint64) {
+	var memory runtime.MemStats
+	runtime.ReadMemStats(&memory)
+	return runtime.Version(), runtime.NumGoroutine(), memory.Alloc
 }
 
 func (s *Server) invitationURL(route, token string) string {

@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: 책결 API
-  version: 0.7.0
-  description: 개인 로컬 계정, 친구·그룹 독서 공유, 기록, 통계, 알림, 계정 삭제와 운영자 안전 기능을 제공하는 현재 Go 서버 계약.
+  version: 0.8.0
+  description: 개인 로컬 계정, 친구·그룹 독서 공유, 기록, 통계, 알림, 계정 삭제와 실시간 운영 센터 기능을 제공하는 현재 Go 서버 계약.
 servers:
   - url: http://localhost:8080
 security:
@@ -16,6 +16,7 @@ tags:
   - { name: Reading }
   - { name: Social }
   - { name: Groups }
+  - { name: Operations }
   - { name: Moderation }
 paths:
   /healthz:
@@ -228,6 +229,68 @@ paths:
       summary: 내 모든 기기 푸시 토큰 비활성화
       responses:
         '204': { $ref: '#/components/responses/NoContent' }
+
+  /v1/admin/overview:
+    get:
+      tags: [Operations]
+      summary: API 런타임과 PostgreSQL 운영 지표 조회
+      security: [{ adminKeyAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/AdminIDHeader'
+      responses:
+        '200':
+          description: 현재 운영 현황
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminOverview' }
+        '401': { $ref: '#/components/responses/Error' }
+        '501': { $ref: '#/components/responses/Error' }
+
+  /v1/admin/logs:
+    get:
+      tags: [Operations]
+      summary: 현재 API 프로세스의 최근 로그 조회
+      description: 최대 1,000건의 메모리 링버퍼 중 지정한 ID 이후 로그를 반환한다. 서버 재시작 시 버퍼는 초기화된다.
+      security: [{ adminKeyAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/AdminLogAfter'
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 500, default: 200 }
+        - $ref: '#/components/parameters/AdminIDHeader'
+      responses:
+        '200':
+          description: 최근 로그
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/AdminLogEntry' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+
+  /v1/admin/logs/stream:
+    get:
+      tags: [Operations]
+      summary: 인증 헤더 기반 실시간 API 로그 스트림
+      description: NDJSON으로 기존 로그와 새 로그를 전송하고 약 10초마다 연결을 종료한다. 클라이언트는 마지막 ID로 즉시 재연결한다.
+      security: [{ adminKeyAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/AdminLogAfter'
+        - $ref: '#/components/parameters/AdminIDHeader'
+      responses:
+        '200':
+          description: log 또는 heartbeat 이벤트의 NDJSON 스트림
+          content:
+            application/x-ndjson:
+              schema:
+                type: string
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
 
   /v1/admin/reports:
     get:
@@ -880,6 +943,11 @@ components:
       in: header
       required: false
       schema: { type: string, maxLength: 100, default: operator }
+    AdminLogAfter:
+      name: after
+      in: query
+      description: 이 로그 ID보다 큰 항목만 반환한다.
+      schema: { type: integer, minimum: 0, default: 0 }
   responses:
     NoContent:
       description: 처리 완료
@@ -1161,6 +1229,48 @@ components:
           minimum: 0
           maximum: 8760
           description: suspend에서만 1 이상이며 나머지 조치는 0이다.
+
+    AdminLogEntry:
+      type: object
+      required: [id, occurredAt, level, message]
+      properties:
+        id: { type: integer, minimum: 1 }
+        occurredAt: { type: string, format: date-time }
+        level: { type: string, enum: [debug, info, warn, error] }
+        message: { type: string }
+        method: { type: string }
+        path: { type: string, description: 쿼리 문자열을 제외한 URL 경로 }
+        status: { type: integer, minimum: 100, maximum: 599 }
+        durationMs: { type: integer, minimum: 0 }
+        responseBytes: { type: integer, minimum: 0 }
+        detail: { type: string, maxLength: 801 }
+
+    AdminStorageOverview:
+      type: object
+      required: [users, activeSessions, readingRuns, progressEntries, openReports, pendingOutbox, pendingNotifications, failedNotifications, databaseSizeBytes]
+      properties:
+        users: { type: integer, minimum: 0 }
+        activeSessions: { type: integer, minimum: 0 }
+        readingRuns: { type: integer, minimum: 0 }
+        progressEntries: { type: integer, minimum: 0 }
+        openReports: { type: integer, minimum: 0 }
+        pendingOutbox: { type: integer, minimum: 0 }
+        pendingNotifications: { type: integer, minimum: 0 }
+        failedNotifications: { type: integer, minimum: 0 }
+        databaseSizeBytes: { type: integer, minimum: 0 }
+
+    AdminOverview:
+      type: object
+      required: [status, database, generatedAt, uptimeSeconds, goVersion, goroutines, memoryBytes, storage]
+      properties:
+        status: { const: ok }
+        database: { const: connected }
+        generatedAt: { type: string, format: date-time }
+        uptimeSeconds: { type: integer, minimum: 0 }
+        goVersion: { type: string }
+        goroutines: { type: integer, minimum: 1 }
+        memoryBytes: { type: integer, minimum: 0 }
+        storage: { $ref: '#/components/schemas/AdminStorageOverview' }
 
     AdminReport:
       type: object

@@ -73,7 +73,7 @@ EXPO_PUBLIC_APP_LINK_DOMAIN=links.example.com
 
 App Links와 푸시는 Expo Go가 아닌 development build 또는 배포 빌드에서 검증한다. 비밀번호 원문은 저장하지 않으며 앱 세션은 Android Keystore 기반 SecureStore에, 서버에는 토큰의 SHA-256 해시만 저장한다. 계정을 삭제하면 서비스 데이터·자격 증명·세션이 함께 삭제되어 다시 최초 가입이 가능해진다.
 
-로컬 운영 콘솔은 `http://localhost:8080/admin`이다. `ADMIN_API_KEY`를 브라우저 탭 세션에만 보관하며, 운영에서는 이 경로를 IAP/SSO 또는 제한된 네트워크 뒤에 둔다. HTTPS 초대 링크에 필요한 도메인 파일은 `deploy/app-links` 템플릿을 사용한다.
+로컬 운영 센터는 `http://localhost:8080/admin`이다. 운영 현황, API 요청 실시간 로그, 신고 큐와 감사 기록을 한 화면에서 확인한다. 실시간 로그는 현재 API 프로세스의 최근 1,000건만 메모리에 보관하고 재시작 시 초기화되므로, 장기 보관은 `stdout` 수집 시스템을 별도로 연결한다. `ADMIN_API_KEY`는 브라우저 탭 세션에만 보관하며 URL이나 로그에 포함하지 않는다. 운영에서는 이 경로를 IAP/SSO 또는 제한된 네트워크 뒤에 둔다. HTTPS 초대 링크에 필요한 도메인 파일은 `deploy/app-links` 템플릿을 사용한다.
 
 전체 계정·인프라·스토어 작업은 [외부·인프라 체크리스트](docs/EXTERNAL_SETUP.md)에 정리돼 있다.
 
