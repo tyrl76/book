@@ -1,0 +1,122 @@
+name: bookgyeol
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-book}
+      POSTGRES_USER: ${POSTGRES_USER:-book}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - private
+
+  migrate:
+    image: bookgyeol:${BOOKGYEOL_IMAGE_TAG:-latest}
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    command: ["/app/migrate"]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-book}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-book}?sslmode=disable
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - private
+    restart: "no"
+
+  api:
+    image: bookgyeol:${BOOKGYEOL_IMAGE_TAG:-latest}
+    command: ["/app/api"]
+    restart: unless-stopped
+    environment: &app_environment
+      DATABASE_URL: postgres://${POSTGRES_USER:-book}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-book}?sslmode=disable
+      PORT: "8080"
+      ALLOW_DEV_AUTH: "false"
+      LOCAL_AUTH_ENABLED: "true"
+      ADMIN_API_KEY: ${ADMIN_API_KEY:?ADMIN_API_KEY is required}
+      PUBLIC_APP_URL: https://${APP_DOMAIN:?APP_DOMAIN is required}
+      ALLOWED_ORIGINS: https://${APP_DOMAIN}
+      KAKAO_REST_API_KEY: ${KAKAO_REST_API_KEY:-}
+      EXPO_PUSH_URL: ${EXPO_PUSH_URL:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    expose:
+      - "8080"
+    networks:
+      - private
+      - web
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  worker:
+    image: bookgyeol:${BOOKGYEOL_IMAGE_TAG:-latest}
+    command: ["/app/worker"]
+    restart: unless-stopped
+    environment: *app_environment
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - private
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?APP_DOMAIN is required}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL is required}
+      ADMIN_BASIC_HASH: ${ADMIN_BASIC_HASH:?ADMIN_BASIC_HASH is required}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+    networks:
+      - web
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  private:
+    internal: true
+  web:

@@ -1,4 +1,5 @@
 .env
+deploy/vm/.env
 .DS_Store
 *.log
 .idea/
