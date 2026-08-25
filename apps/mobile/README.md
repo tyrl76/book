@@ -21,6 +21,8 @@ EXPO_PUBLIC_API_URL=http://127.0.0.1:8080
 
 Android 에뮬레이터는 API URL을 지정하지 않으면 `http://10.0.2.2:8080`을 사용한다. 실제 기기는 개발 PC의 LAN 주소가 필요하다.
 
+EAS의 `preview`·`production` 빌드는 `eas.json`에 지정한 개인 HTTPS 서버 `https://34-64-97-191.sslip.io`를 사용한다. 이 값은 공개 주소이므로 앱에 포함해도 되지만, `ADMIN_API_KEY`나 데이터베이스 비밀번호는 모바일 환경 변수에 넣지 않는다.
+
 ## 명령
 
 ```bash

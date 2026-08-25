@@ -132,6 +132,7 @@ type Server struct {
 	publicAppURL     string
 	logger           *slog.Logger
 	adminLogs        *AdminLogBuffer
+	rateLimiter      *requestRateLimiter
 	startedAt        time.Time
 }
 
@@ -158,6 +159,7 @@ func NewServer(store Store, options Options) http.Handler {
 		publicAppURL:     strings.TrimRight(strings.TrimSpace(options.PublicAppURL), "/"),
 		logger:           logger,
 		adminLogs:        adminLogs,
+		rateLimiter:      newRequestRateLimiter(),
 		startedAt:        time.Now(),
 	}
 	for _, origin := range options.AllowedOrigins {
@@ -167,8 +169,8 @@ func NewServer(store Store, options Options) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", server.health)
 	mux.HandleFunc("GET /v1/auth/status", server.localAuthStatus)
-	mux.HandleFunc("POST /v1/auth/register", server.registerLocalAccount)
-	mux.HandleFunc("POST /v1/auth/login", server.loginLocalAccount)
+	mux.HandleFunc("POST /v1/auth/register", server.rateLimit("register", 5, time.Minute, server.registerLocalAccount))
+	mux.HandleFunc("POST /v1/auth/login", server.rateLimit("login", 10, time.Minute, server.loginLocalAccount))
 	mux.HandleFunc("POST /v1/auth/logout", server.authWithoutAccessCheck(server.logoutLocalAccount))
 	mux.HandleFunc("GET /v1/reading-runs", server.auth(server.listReadingRuns))
 	mux.HandleFunc("POST /v1/reading-runs", server.auth(server.createReadingRun))
@@ -212,13 +214,13 @@ func NewServer(store Store, options Options) http.Handler {
 	mux.HandleFunc("DELETE /v1/me/reading-presence", server.auth(server.stopReadingPresence))
 	mux.HandleFunc("GET /v1/me/weekly-report", server.auth(server.getWeeklyReport))
 	mux.HandleFunc("GET /admin", server.adminConsole)
-	mux.HandleFunc("GET /v1/admin/overview", server.adminAuth(server.getAdminOverview))
-	mux.HandleFunc("GET /v1/admin/logs", server.adminAuth(server.listAdminLogs))
-	mux.HandleFunc("GET /v1/admin/logs/stream", server.adminAuth(server.streamAdminLogs))
-	mux.HandleFunc("GET /v1/admin/reports", server.adminAuth(server.listAdminReports))
-	mux.HandleFunc("PATCH /v1/admin/reports/{reportID}", server.adminAuth(server.resolveAdminReport))
-	mux.HandleFunc("POST /v1/admin/hidden-targets/{targetType}/{targetID}/restore", server.adminAuth(server.restoreAdminTarget))
-	mux.HandleFunc("GET /v1/admin/moderation/actions", server.adminAuth(server.listAdminActions))
+	mux.HandleFunc("GET /v1/admin/overview", server.rateLimit("admin", 120, time.Minute, server.adminAuth(server.getAdminOverview)))
+	mux.HandleFunc("GET /v1/admin/logs", server.rateLimit("admin", 120, time.Minute, server.adminAuth(server.listAdminLogs)))
+	mux.HandleFunc("GET /v1/admin/logs/stream", server.rateLimit("admin", 120, time.Minute, server.adminAuth(server.streamAdminLogs)))
+	mux.HandleFunc("GET /v1/admin/reports", server.rateLimit("admin", 120, time.Minute, server.adminAuth(server.listAdminReports)))
+	mux.HandleFunc("PATCH /v1/admin/reports/{reportID}", server.rateLimit("admin", 120, time.Minute, server.adminAuth(server.resolveAdminReport)))
+	mux.HandleFunc("POST /v1/admin/hidden-targets/{targetType}/{targetID}/restore", server.rateLimit("admin", 120, time.Minute, server.adminAuth(server.restoreAdminTarget)))
+	mux.HandleFunc("GET /v1/admin/moderation/actions", server.rateLimit("admin", 120, time.Minute, server.adminAuth(server.listAdminActions)))
 
 	return server.cors(server.recoverPanic(server.logRequests(mux)))
 }

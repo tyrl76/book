@@ -104,10 +104,13 @@ func TestAdminConsoleIncludesOperationsViews(t *testing.T) {
 	handler := NewServer(&fakeStore{}, Options{})
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/admin", nil))
-	for _, expected := range []string{"운영 현황", "실시간 API 로그", "신고 및 감사 기록"} {
+	for _, expected := range []string{"운영 현황", "실시간 API 로그", "신고 및 감사 기록", "최초 개인 계정 만들기", "/v1/auth/register"} {
 		if !strings.Contains(response.Body.String(), expected) {
 			t.Fatalf("admin console missing %q", expected)
 		}
+	}
+	if strings.Contains(response.Body.String(), "bookgyeol.ownerPassword") {
+		t.Fatal("admin console must not persist the owner password")
 	}
 	if !strings.Contains(response.Header().Get("Content-Security-Policy"), "frame-ancestors 'none'") {
 		t.Fatal("admin console missing restrictive content security policy")
