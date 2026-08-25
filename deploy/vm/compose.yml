@@ -1,5 +1,11 @@
 name: bookgyeol
 
+x-logging: &default_logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "5"
+
 services:
   db:
     image: postgres:17-alpine
@@ -17,6 +23,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - private
+    logging: *default_logging
 
   migrate:
     image: bookgyeol:${BOOKGYEOL_IMAGE_TAG:-latest}
@@ -29,6 +36,7 @@ services:
     networks:
       - private
     restart: "no"
+    logging: *default_logging
 
   api:
     image: bookgyeol:${BOOKGYEOL_IMAGE_TAG:-latest}
@@ -64,6 +72,7 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+    logging: *default_logging
 
   worker:
     image: bookgyeol:${BOOKGYEOL_IMAGE_TAG:-latest}
@@ -84,6 +93,7 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+    logging: *default_logging
 
   caddy:
     image: caddy:2-alpine
@@ -110,6 +120,7 @@ services:
       - NET_BIND_SERVICE
     security_opt:
       - no-new-privileges:true
+    logging: *default_logging
 
 volumes:
   postgres_data:

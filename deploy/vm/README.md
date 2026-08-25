@@ -43,8 +43,18 @@ docker compose exec db psql -U book -d book
 
 ## 백업
 
+systemd timer를 설치하면 매일 03:15 전후에 백업하고 7일이 지난 로컬 백업을 삭제한다.
+
 ```bash
-docker compose exec -T db pg_dump -U book -d book -Fc > "book-$(date +%Y%m%d-%H%M%S).dump"
+chmod 700 backup.sh
+install -m 644 bookgyeol-backup.service /etc/systemd/system/
+install -m 644 bookgyeol-backup.timer /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now bookgyeol-backup.timer
+systemctl start bookgyeol-backup.service
+systemctl status bookgyeol-backup.timer
 ```
 
-서버의 80/tcp, 443/tcp, 443/udp가 클라우드 방화벽에서 열려 있어야 Caddy가 인증서를 발급할 수 있다. 인증서 발급 전에는 HTTPS 헬스 체크가 실패하고 Caddy 로그에 ACME 연결 오류가 반복된다.
+백업은 `/opt/bookgyeol/backups`에 권한 600으로 저장된다. 같은 VM 디스크의 논리 백업이므로 디스크 장애 대비에는 별도 객체 저장소 복제가 필요하다.
+
+서버의 80/tcp와 443/tcp가 클라우드 방화벽에서 열려 있어야 Caddy가 인증서를 발급할 수 있다. 인증서 발급 전에는 HTTPS 헬스 체크가 실패하고 Caddy 로그에 ACME 연결 오류가 반복된다.
