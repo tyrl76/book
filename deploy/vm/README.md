@@ -17,7 +17,7 @@ docker compose up -d api worker caddy
 curl --fail --show-error "https://${APP_DOMAIN}/healthz"
 ```
 
-PostgreSQL은 호스트 포트를 공개하지 않고 내부 Docker 네트워크에서만 접근한다. `/admin`과 `/v1/admin/*`은 Caddy Basic Auth와 애플리케이션의 `ADMIN_API_KEY`로 이중 보호한다.
+PostgreSQL은 호스트 포트를 공개하지 않고 내부 Docker 네트워크에서만 접근한다. `/admin`과 `/v1/admin/*`은 Caddy Basic Auth와 애플리케이션의 `ADMIN_API_KEY`로 이중 보호한다. 빈 개인 DB를 제3자가 먼저 선점하지 못하도록 `/v1/auth/register`도 Basic Auth로 보호하며, 최초 계정은 운영자가 인증된 요청으로 생성한다.
 
 ## 업데이트
 
