@@ -42,7 +42,7 @@ jobs:
       FLY_APP_NAME: ${{ vars.FLY_APP_NAME }}
       API_HEALTH_URL: ${{ vars.API_HEALTH_URL }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.workflow_run.head_sha }}
       - name: Validate deployment configuration
