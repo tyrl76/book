@@ -1,7 +1,4 @@
-import type { Provider, Session } from '@supabase/supabase-js';
-import { makeRedirectUri } from 'expo-auth-session';
-import * as Linking from 'expo-linking';
-import * as WebBrowser from 'expo-web-browser';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   createContext,
   type PropsWithChildren,
@@ -9,132 +6,122 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from 'react';
-import { AppState, Platform } from 'react-native';
 
-import { bootstrapUser } from '@/lib/api';
-import { getSupabaseClient, isSupabaseConfigured } from '@/lib/supabase';
-
-WebBrowser.maybeCompleteAuthSession();
-
-type SocialProvider = Extract<Provider, 'google' | 'apple' | 'kakao'>;
+import { fetchAuthStatus, loginAccount, logoutAccount, registerAccount } from '@/lib/api';
+import {
+  clearSession,
+  onSessionCleared,
+  persistSession,
+  restoreSession,
+} from '@/lib/session-storage';
+import type { AuthSession } from '@/types/domain';
 
 type AuthContextValue = {
-  configured: boolean;
   loading: boolean;
-  session: Session | null;
+  session: AuthSession | null;
   userID: string | null;
-  signIn: (provider: SocialProvider) => Promise<void>;
+  registrationOpen: boolean | null;
+  statusError: string | null;
+  refreshStatus: () => Promise<void>;
+  signIn: (email: string, password: string) => Promise<void>;
+  register: (nickname: string, email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
-  completeOAuthURL: (url: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
-const devUserID = process.env.EXPO_PUBLIC_DEV_USER_ID ?? '11111111-1111-4111-8111-111111111111';
-
-function oauthCode(url: string) {
-  const parsed = Linking.parse(url);
-  const code = parsed.queryParams?.code;
-  return typeof code === 'string' ? code : null;
-}
 
 export function AuthProvider({ children }: PropsWithChildren) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(isSupabaseConfigured);
-  const exchangeRef = useRef<{ code: string; promise: Promise<void> } | null>(null);
+  const queryClient = useQueryClient();
+  const [session, setSession] = useState<AuthSession | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [registrationOpen, setRegistrationOpen] = useState<boolean | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
 
-  const completeOAuthURL = useCallback(async (url: string) => {
-    if (!isSupabaseConfigured) return;
-    const code = oauthCode(url);
-    if (!code) throw new Error('로그인 응답에 인증 코드가 없습니다');
-    if (exchangeRef.current?.code === code) return exchangeRef.current.promise;
-
-    const promise = getSupabaseClient()
-      .auth.exchangeCodeForSession(code)
-      .then(({ error }) => {
-        if (error) throw error;
-      });
-    exchangeRef.current = { code, promise };
-    return promise;
+  const refreshStatus = useCallback(async () => {
+    setStatusError(null);
+    try {
+      const status = await fetchAuthStatus();
+      setRegistrationOpen(status.registrationOpen);
+    } catch (error) {
+      setRegistrationOpen(null);
+      setStatusError(error instanceof Error ? error.message : '서버에 연결하지 못했습니다');
+    }
   }, []);
 
   useEffect(() => {
-    if (!isSupabaseConfigured) return;
-    const client = getSupabaseClient();
     let active = true;
-    client.auth.getSession().then(({ data, error }) => {
-      if (!active) return;
-      if (error) console.warn('restore Supabase session', error);
-      setSession(data.session);
-      setLoading(false);
+    const unsubscribe = onSessionCleared(() => {
+      if (active) {
+        queryClient.clear();
+        setSession(null);
+        void refreshStatus();
+      }
     });
-    const { data } = client.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession);
-      setLoading(false);
-    });
+    restoreSession()
+      .then(async (stored) => {
+        if (!active) return;
+        if (stored && new Date(stored.expiresAt).getTime() > Date.now()) {
+          setSession(stored);
+          return;
+        }
+        if (stored) await clearSession();
+        await refreshStatus();
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
     return () => {
       active = false;
-      data.subscription.unsubscribe();
+      unsubscribe();
     };
-  }, []);
+  }, [queryClient, refreshStatus]);
 
-  useEffect(() => {
-    if (!isSupabaseConfigured || Platform.OS === 'web') return;
-    const client = getSupabaseClient();
-    const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') client.auth.startAutoRefresh();
-      else client.auth.stopAutoRefresh();
-    });
-    return () => subscription.remove();
-  }, []);
+  const signIn = useCallback(async (email: string, password: string) => {
+    const nextSession = await loginAccount({ email: email.trim(), password });
+    await persistSession(nextSession);
+    queryClient.clear();
+    setSession(nextSession);
+    setRegistrationOpen(false);
+    setStatusError(null);
+  }, [queryClient]);
 
-  useEffect(() => {
-    if (!session) return;
-    const metadata = session.user.user_metadata;
-    const nickname = metadata.full_name ?? metadata.name ?? metadata.preferred_username;
-    bootstrapUser(typeof nickname === 'string' ? nickname : undefined).catch((error) => {
-      console.warn('bootstrap user', error);
-    });
-  }, [session]);
-
-  const signIn = useCallback(
-    async (provider: SocialProvider) => {
-      const redirectTo = makeRedirectUri({ scheme: 'bookgyeol', path: 'auth/callback' });
-      const { data, error } = await getSupabaseClient().auth.signInWithOAuth({
-        provider,
-        options: { redirectTo, skipBrowserRedirect: true },
-      });
-      if (error) throw error;
-      if (!data.url) throw new Error('로그인 주소를 만들지 못했습니다');
-
-      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-      if (result.type === 'success') await completeOAuthURL(result.url);
-      if (result.type === 'cancel' || result.type === 'dismiss') {
-        throw new Error('로그인이 취소되었습니다');
-      }
-    },
-    [completeOAuthURL],
-  );
+  const register = useCallback(async (nickname: string, email: string, password: string) => {
+    const nextSession = await registerAccount({ nickname: nickname.trim(), email: email.trim(), password });
+    await persistSession(nextSession);
+    queryClient.clear();
+    setSession(nextSession);
+    setRegistrationOpen(false);
+    setStatusError(null);
+  }, [queryClient]);
 
   const signOut = useCallback(async () => {
-    if (!isSupabaseConfigured) return;
-    const { error } = await getSupabaseClient().auth.signOut();
-    if (error) throw error;
-  }, []);
+    try {
+      await logoutAccount();
+    } catch (error) {
+      console.warn('revoke local session', error);
+    } finally {
+      await clearSession().catch((error) => console.warn('clear local session', error));
+      queryClient.clear();
+      setSession(null);
+      await refreshStatus();
+    }
+  }, [queryClient, refreshStatus]);
 
   const value = useMemo(
     () => ({
-      configured: isSupabaseConfigured,
       loading,
       session,
-      userID: session?.user.id ?? (isSupabaseConfigured ? null : devUserID),
+      userID: session?.user.id ?? null,
+      registrationOpen,
+      statusError,
+      refreshStatus,
       signIn,
+      register,
       signOut,
-      completeOAuthURL,
     }),
-    [completeOAuthURL, loading, session, signIn, signOut],
+    [loading, refreshStatus, register, registrationOpen, session, signIn, signOut, statusError],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

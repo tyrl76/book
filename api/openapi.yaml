@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: 책결 API
-  version: 0.6.0
-  description: 친구·그룹 독서 공유, 기록, 통계, 알림, 계정 삭제와 운영자 안전 기능을 제공하는 현재 Go 서버 계약.
+  version: 0.7.0
+  description: 개인 로컬 계정, 친구·그룹 독서 공유, 기록, 통계, 알림, 계정 삭제와 운영자 안전 기능을 제공하는 현재 Go 서버 계약.
 servers:
   - url: http://localhost:8080
 security:
@@ -10,6 +10,7 @@ security:
   - devUserAuth: []
 tags:
   - { name: System }
+  - { name: Authentication }
   - { name: Account }
   - { name: Catalog }
   - { name: Reading }
@@ -33,6 +34,69 @@ paths:
                 properties:
                   status: { const: ok }
         '503': { $ref: '#/components/responses/Error' }
+
+  /v1/auth/status:
+    get:
+      tags: [Authentication]
+      summary: 첫 개인 계정 가입 가능 여부
+      security: []
+      responses:
+        '200':
+          description: 개인 계정 상태
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [registrationOpen]
+                properties:
+                  registrationOpen: { type: boolean }
+
+  /v1/auth/register:
+    post:
+      tags: [Authentication]
+      summary: 최초 개인 계정 생성
+      description: local_credentials가 비어 있을 때 한 번만 성공한다.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LocalRegistration' }
+      responses:
+        '201':
+          description: 생성된 계정과 30일 세션
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LocalAuthSession' }
+        '400': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /v1/auth/login:
+    post:
+      tags: [Authentication]
+      summary: 개인 계정 로그인
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LocalLogin' }
+      responses:
+        '200':
+          description: 새 30일 세션
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LocalAuthSession' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+
+  /v1/auth/logout:
+    post:
+      tags: [Authentication]
+      summary: 현재 개인 세션 폐기
+      responses:
+        '204': { $ref: '#/components/responses/NoContent' }
+        '401': { $ref: '#/components/responses/Error' }
 
   /v1/me/bootstrap:
     post:
@@ -78,8 +142,8 @@ paths:
         '400': { $ref: '#/components/responses/Error' }
     delete:
       tags: [Account]
-      summary: Supabase Auth와 서비스 데이터의 내 계정 삭제
-      description: Auth 삭제가 일시 실패하면 삭제 큐에 넣고 사용을 즉시 차단한 뒤 Worker가 재시도한다.
+      summary: 로그인 계정과 서비스 데이터 삭제
+      description: 개인 계정은 PostgreSQL 자격 증명과 세션까지 함께 삭제한다. Supabase 연동 모드에서는 외부 Auth 삭제 실패를 Worker가 재시도한다.
       responses:
         '204': { $ref: '#/components/responses/NoContent' }
         '202':
@@ -91,6 +155,18 @@ paths:
                 required: [status]
                 properties:
                   status: { const: pending }
+        '401': { $ref: '#/components/responses/Error' }
+
+  /v1/me/storage-status:
+    get:
+      tags: [Account]
+      summary: 내 PostgreSQL 저장 상태와 기록 건수 확인
+      responses:
+        '200':
+          description: 저장 상태
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StorageStatus' }
         '401': { $ref: '#/components/responses/Error' }
 
   /v1/me/stats:
@@ -736,7 +812,7 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
-      bearerFormat: Supabase JWT
+      bearerFormat: opaque local session or Supabase JWT
     devUserAuth:
       type: apiKey
       in: header
@@ -823,6 +899,52 @@ components:
           properties:
             code: { type: string }
             message: { type: string }
+
+    LocalRegistration:
+      type: object
+      additionalProperties: false
+      required: [email, password, nickname]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 10, maxLength: 72 }
+        nickname: { type: string, minLength: 1, maxLength: 40 }
+
+    LocalLogin:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 10, maxLength: 72 }
+
+    LocalAuthUser:
+      type: object
+      required: [id, email, nickname]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        nickname: { type: string }
+
+    LocalAuthSession:
+      type: object
+      required: [token, expiresAt, user]
+      properties:
+        token: { type: string, writeOnly: true }
+        expiresAt: { type: string, format: date-time }
+        user: { $ref: '#/components/schemas/LocalAuthUser' }
+
+    StorageStatus:
+      type: object
+      required: [database, connected, readingRuns, progressEntries, feedEvents, comments, lastSavedAt, checkedAt]
+      properties:
+        database: { const: PostgreSQL }
+        connected: { type: boolean }
+        readingRuns: { type: integer, minimum: 0 }
+        progressEntries: { type: integer, minimum: 0 }
+        feedEvents: { type: integer, minimum: 0 }
+        comments: { type: integer, minimum: 0 }
+        lastSavedAt: { type: string, format: date-time }
+        checkedAt: { type: string, format: date-time }
 
     Book:
       type: object

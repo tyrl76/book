@@ -5,7 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
 import { Colors } from '@/constants/theme';
-import { AuthProvider } from '@/features/auth/auth-provider';
+import { AuthProvider, useAuth } from '@/features/auth/auth-provider';
 import { AppThemeProvider, useThemeSelection } from '@/features/theme/theme-provider';
 import { AppDatabaseProvider } from '@/lib/database-provider';
 import { SyncOnResume } from '@/lib/sync-on-resume';
@@ -55,18 +55,35 @@ function AppRoot() {
       <QueryClientProvider client={queryClient}>
         <AppDatabaseProvider>
           <AuthProvider>
-            <SyncOnResume />
-            <PushNotificationObserver />
-            <Stack
-              screenOptions={{
-                headerShadowVisible: false,
-                headerStyle: { backgroundColor: colors.background },
-                headerTintColor: colors.text,
-                contentStyle: { backgroundColor: colors.background },
-              }}>
+            <AppStack />
+          </AuthProvider>
+        </AppDatabaseProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
+  );
+}
+
+function AppStack() {
+  const auth = useAuth();
+  const { resolvedScheme } = useThemeSelection();
+  const colors = Colors[resolvedScheme];
+
+  return (
+    <>
+      <SyncOnResume />
+      <PushNotificationObserver />
+      <Stack
+        screenOptions={{
+          headerShadowVisible: false,
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.text,
+          contentStyle: { backgroundColor: colors.background },
+        }}>
+        <Stack.Protected guard={!auth.session}>
+          <Stack.Screen name="sign-in" options={{ headerShown: false }} />
+        </Stack.Protected>
+        <Stack.Protected guard={Boolean(auth.session)}>
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="sign-in" options={{ headerShown: false }} />
-              <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
               <Stack.Screen
                 name="book-search"
                 options={{ presentation: 'modal', title: '읽을 책 추가' }}
@@ -90,10 +107,8 @@ function AppRoot() {
               <Stack.Screen name="group/[groupID]" options={{ title: '독서 그룹' }} />
               <Stack.Screen name="group-invite/[token]" options={{ title: '그룹 초대' }} />
               <Stack.Screen name="weekly-report" options={{ title: '주간 동행 리포트' }} />
-            </Stack>
-          </AuthProvider>
-        </AppDatabaseProvider>
-      </QueryClientProvider>
-    </ThemeProvider>
+        </Stack.Protected>
+      </Stack>
+    </>
   );
 }

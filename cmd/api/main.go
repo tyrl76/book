@@ -38,7 +38,7 @@ func main() {
 	}
 	defer store.Close()
 
-	var tokenVerifier api.TokenVerifier
+	var remoteTokenVerifier api.TokenVerifier
 	var authUserDeleter api.AuthUserDeleter
 	if settings.SupabaseIssuer != "" {
 		verifier, err := bookauth.NewVerifier(ctx, settings.SupabaseIssuer, settings.SupabaseJWKSURL)
@@ -46,7 +46,7 @@ func main() {
 			logger.Error("configure Supabase JWT verifier", "error", err)
 			os.Exit(1)
 		}
-		tokenVerifier = verifier
+		remoteTokenVerifier = verifier
 	}
 	if settings.SupabaseURL != "" && settings.SupabaseServiceRoleKey != "" {
 		authUserDeleter = bookauth.NewAdminClient(settings.SupabaseURL, settings.SupabaseServiceRoleKey)
@@ -57,16 +57,29 @@ func main() {
 		catalogProvider = catalog.NewLayeredProvider(kakao.NewClient(settings.KakaoRESTAPIKey), store)
 	}
 
+	verifiers := make([]bookauth.SubjectVerifier, 0, 2)
+	if settings.LocalAuthEnabled {
+		verifiers = append(verifiers, store)
+	}
+	if remoteTokenVerifier != nil {
+		verifiers = append(verifiers, remoteTokenVerifier)
+	}
+	var tokenVerifier api.TokenVerifier
+	if len(verifiers) > 0 {
+		tokenVerifier = bookauth.NewCompositeVerifier(verifiers...)
+	}
+
 	handler := api.NewServer(store, api.Options{
-		AllowedOrigins:  settings.AllowedOrigins,
-		AllowDevAuth:    settings.AllowDevAuth,
-		DevUserID:       settings.DevUserID,
-		TokenVerifier:   tokenVerifier,
-		Catalog:         catalogProvider,
-		AuthUserDeleter: authUserDeleter,
-		AdminAPIKey:     settings.AdminAPIKey,
-		PublicAppURL:    settings.PublicAppURL,
-		Logger:          logger,
+		AllowedOrigins:   settings.AllowedOrigins,
+		AllowDevAuth:     settings.AllowDevAuth,
+		LocalAuthEnabled: settings.LocalAuthEnabled,
+		DevUserID:        settings.DevUserID,
+		TokenVerifier:    tokenVerifier,
+		Catalog:          catalogProvider,
+		AuthUserDeleter:  authUserDeleter,
+		AdminAPIKey:      settings.AdminAPIKey,
+		PublicAppURL:     settings.PublicAppURL,
+		Logger:           logger,
 	})
 	server := &http.Server{
 		Addr:              ":" + settings.Port,
@@ -78,7 +91,7 @@ func main() {
 	}
 
 	go func() {
-		logger.Info("api listening", "address", server.Addr, "devAuth", settings.AllowDevAuth, "supabaseAuth", tokenVerifier != nil, "kakaoCatalog", settings.KakaoRESTAPIKey != "")
+		logger.Info("api listening", "address", server.Addr, "devAuth", settings.AllowDevAuth, "localAuth", settings.LocalAuthEnabled, "supabaseAuth", remoteTokenVerifier != nil, "kakaoCatalog", settings.KakaoRESTAPIKey != "")
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error("serve api", "error", err)
 			stop()

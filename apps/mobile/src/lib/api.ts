@@ -1,8 +1,9 @@
 import { Platform } from 'react-native';
 import { z } from 'zod';
 
-import { getSupabaseClient, isSupabaseConfigured } from '@/lib/supabase';
+import { clearSession, getCurrentSession } from '@/lib/session-storage';
 import type {
+  AuthSession,
   Book,
   FeedComment,
   FeedEvent,
@@ -16,6 +17,7 @@ import type {
   ReadingRun,
   ReadingGroup,
   ReadingStats,
+  StorageStatus,
   WeeklyReport,
 } from '@/types/domain';
 
@@ -182,14 +184,36 @@ const weeklyReportSchema = z.object({
   myFinishedBooks: z.number().int().nonnegative(),
 });
 
+const authUserSchema = z.object({
+  id: z.string().uuid(),
+  email: z.string().email(),
+  nickname: z.string(),
+});
+
+const authSessionSchema = z.object({
+  token: z.string().min(32),
+  expiresAt: z.string(),
+  user: authUserSchema,
+});
+
+const storageStatusSchema = z.object({
+  database: z.string(),
+  connected: z.boolean(),
+  readingRuns: z.number().int().nonnegative(),
+  progressEntries: z.number().int().nonnegative(),
+  feedEvents: z.number().int().nonnegative(),
+  comments: z.number().int().nonnegative(),
+  lastSavedAt: z.string(),
+  checkedAt: z.string(),
+});
+
 const defaultBaseURL = Platform.select({
   android: 'http://10.0.2.2:8080',
   default: 'http://127.0.0.1:8080',
 });
 
 const baseURL = process.env.EXPO_PUBLIC_API_URL ?? defaultBaseURL;
-const devUserID =
-  process.env.EXPO_PUBLIC_DEV_USER_ID ?? '11111111-1111-4111-8111-111111111111';
+export const apiBaseURL = baseURL;
 
 export class ApiError extends Error {
   constructor(
@@ -200,16 +224,12 @@ export class ApiError extends Error {
   }
 }
 
-async function request(path: string, init?: RequestInit): Promise<unknown> {
+async function request(path: string, init?: RequestInit, authenticated = true): Promise<unknown> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (isSupabaseConfigured) {
-    const client = getSupabaseClient();
-    const { data, error } = await client.auth.getSession();
-    if (error) throw error;
-    if (!data.session?.access_token) throw new ApiError(401, '로그인이 필요합니다');
-    headers.Authorization = `Bearer ${data.session.access_token}`;
-  } else {
-    headers['X-User-ID'] = devUserID;
+  if (authenticated) {
+    const session = getCurrentSession();
+    if (!session?.token) throw new ApiError(401, '로그인이 필요합니다');
+    headers.Authorization = `Bearer ${session.token}`;
   }
 
   const response = await fetch(`${baseURL}${path}`, {
@@ -226,9 +246,32 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
       typeof body === 'object' && body && 'error' in body
         ? String((body as { error?: { message?: string } }).error?.message ?? '요청에 실패했습니다')
         : '요청에 실패했습니다';
+    if (authenticated && response.status === 401) await clearSession().catch(() => undefined);
     throw new ApiError(response.status, message);
   }
   return body;
+}
+
+export async function fetchAuthStatus(): Promise<{ registrationOpen: boolean }> {
+  return z.object({ registrationOpen: z.boolean() }).parse(await request('/v1/auth/status', undefined, false));
+}
+
+export async function registerAccount(input: { email: string; password: string; nickname: string }): Promise<AuthSession> {
+  return authSessionSchema.parse(await request('/v1/auth/register', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  }, false));
+}
+
+export async function loginAccount(input: { email: string; password: string }): Promise<AuthSession> {
+  return authSessionSchema.parse(await request('/v1/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  }, false));
+}
+
+export async function logoutAccount(): Promise<void> {
+  await request('/v1/auth/logout', { method: 'POST' });
 }
 
 export async function fetchReadingRuns(): Promise<ReadingRun[]> {
@@ -354,6 +397,10 @@ export async function createReport(input: {
 
 export async function fetchProfile(): Promise<Profile> {
   return profileSchema.parse(await request('/v1/me'));
+}
+
+export async function fetchStorageStatus(): Promise<StorageStatus> {
+  return storageStatusSchema.parse(await request('/v1/me/storage-status'));
 }
 
 export async function updateProfile(input: Partial<Pick<Profile, 'nickname' | 'bio' | 'defaultVisibility' | 'progressPrecision'>>): Promise<Profile> {

@@ -19,7 +19,7 @@ services:
       - ./migrations/000003_groups_presence.sql:/docker-entrypoint-initdb.d/003-groups-presence.sql:ro
       - ./migrations/000004_notification_delivery.sql:/docker-entrypoint-initdb.d/004-notification-delivery.sql:ro
       - ./migrations/000005_launch_safety.sql:/docker-entrypoint-initdb.d/005-launch-safety.sql:ro
-      - ./deploy/dev/seed.sql:/docker-entrypoint-initdb.d/006-seed.sql:ro
+      - ./migrations/000006_local_auth.sql:/docker-entrypoint-initdb.d/006-local-auth.sql:ro
 
 volumes:
   book_postgres_data:

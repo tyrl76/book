@@ -41,8 +41,7 @@ export default function MeScreen() {
   const profile = useProfile();
   const stats = useReadingStats();
   const runs = useReadingRuns();
-  const metadata = auth.session?.user.user_metadata;
-  const displayName = profile.data?.nickname ?? String(metadata?.full_name ?? metadata?.name ?? metadata?.preferred_username ?? '독서가');
+  const displayName = profile.data?.nickname ?? auth.session?.user.nickname ?? '독서가';
   const bio = profile.data?.bio || '천천히 오래 읽어요';
   const pages = Math.round(stats.data?.pagesRead ?? 0);
   const goal = stats.data?.annualGoalBooks ?? 0;
@@ -184,11 +183,9 @@ export default function MeScreen() {
         </View>
       </View>
 
-      {auth.configured ? (
-        <Pressable accessibilityRole="button" accessibilityLabel="로그아웃" onPress={signOut} style={styles.signOut}>
-          <Text style={[styles.signOutText, { color: theme.accent }]}>로그아웃</Text>
-        </Pressable>
-      ) : null}
+      <Pressable accessibilityRole="button" accessibilityLabel="로그아웃" onPress={signOut} style={styles.signOut}>
+        <Text style={[styles.signOutText, { color: theme.accent }]}>로그아웃</Text>
+      </Pressable>
     </Screen>
   );
 }

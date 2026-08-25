@@ -1,6 +1,6 @@
 # 책결 외부·인프라 작업 체크리스트
 
-기준일: 2026-08-24
+기준일: 2026-08-25
 
 코드 저장소 밖에서 소유자가 직접 만들거나 승인해야 하는 작업이다. `필수` 항목이 끝나기 전에는 공개 베타로 배포하지 않는다.
 
@@ -17,7 +17,16 @@ CI/CD 코드, 서버 이미지, migration runner, Fly.io 프로세스 설정과 
 
 이 단계가 뒤늦게 바뀌면 OAuth redirect, APNs/FCM, Universal Links, 스토어 레코드를 모두 다시 설정해야 한다.
 
-### 1.2 Supabase 인증
+### 1.2 인증
+
+개인 VIP 사용 단계는 아래 항목이 이미 구현되어 있으므로 Supabase가 필요하지 않다.
+
+- [x] 첫 계정만 허용하는 이메일·비밀번호 가입과 로그인
+- [x] `ALLOW_DEV_AUTH=false`, `LOCAL_AUTH_ENABLED=true`로 개발 헤더 우회 차단
+- [x] Android SecureStore와 서버 해시 세션 저장
+- [x] Tailscale Serve HTTPS로 사설망 외부 접속
+
+공개 베타로 확장할 때는 비밀번호 복구·이메일 인증 또는 소셜 인증과 로그인 rate limit을 추가한다.
 
 - [ ] 운영·스테이징 Supabase 프로젝트를 분리해 만든다.
 - [ ] 비대칭 Auth signing key와 JWKS가 활성화됐는지 확인한다.
@@ -30,6 +39,7 @@ CI/CD 코드, 서버 이미지, migration runner, Fly.io 프로세스 설정과 
 
 ```dotenv
 ALLOW_DEV_AUTH=false
+LOCAL_AUTH_ENABLED=false
 SUPABASE_URL=https://PROJECT_REF.supabase.co
 SUPABASE_JWT_ISSUER=https://PROJECT_REF.supabase.co/auth/v1
 SUPABASE_JWKS_URL=https://PROJECT_REF.supabase.co/auth/v1/.well-known/jwks.json
@@ -37,14 +47,14 @@ SUPABASE_SERVICE_ROLE_KEY=서버_전용_service_role_키
 ADMIN_API_KEY=32자_이상의_무작위_운영자_비밀
 ```
 
-모바일 `apps/mobile/.env.local`:
+소셜 로그인 UI를 다시 도입할 때의 모바일 환경:
 
 ```dotenv
 EXPO_PUBLIC_SUPABASE_URL=https://PROJECT_REF.supabase.co
 EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 ```
 
-운영에서 `ALLOW_DEV_AUTH=true`가 남으면 임의 사용자 헤더로 접근할 수 있으므로 배포 파이프라인에서 금지 규칙을 둔다.
+운영에서 `ALLOW_DEV_AUTH=true`가 남으면 임의 사용자 헤더로 접근할 수 있으므로 배포 파이프라인에서 금지 규칙을 둔다. 현재 개인 모드는 `LOCAL_AUTH_ENABLED=true`이므로 Supabase 변수가 필요 없다.
 
 ### 1.3 도서 카탈로그
 
@@ -57,7 +67,7 @@ EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 
 - [ ] 한국 사용자 지연 시간이 낮은 리전에 PostgreSQL 17 호환 DB를 만든다.
 - [ ] API와 Worker를 분리 프로세스로 배포한다.
-- [ ] `migrations/000001`부터 `000005`까지 순서대로 적용한다.
+- [ ] `migrations/000001`부터 `000006`까지 순서대로 적용한다.
 - [ ] 자동 백업, 최소 7일 PITR, 암호화, 제한된 네트워크 접근을 켠다.
 - [ ] API 도메인, TLS, 헬스 체크 `/healthz`, 무중단 배포를 설정한다.
 - [ ] Worker를 1개 이상 상시 실행하고 실패 전달 큐를 경보로 연결한다.
@@ -77,14 +87,14 @@ ADMIN_API_KEY=32자_이상의_무작위_값
 
 ### 1.5 푸시와 EAS
 
-- [ ] Expo/EAS 프로젝트를 만들고 `app.json`의 `extra.eas.projectId`를 연결한다.
+- [x] Expo/EAS 프로젝트를 만들고 `app.json`의 `extra.eas.projectId`를 연결한다.
 - [ ] Apple Developer에서 APNs 키, Google/Firebase에서 FCM v1 서비스 계정을 만든다.
 - [ ] EAS credentials에 APNs/FCM을 등록한다.
 - [ ] 서버 Worker에 Expo Push API 주소를 설정한다.
 - [ ] 개발 빌드와 운영 빌드의 실제 기기에서 권한 거절·허용·토큰 갱신·알림 탭 이동을 시험한다.
 - [ ] Expo push receipt 조회 잡을 추가하고 `DeviceNotRegistered` 토큰을 정리한다.
 - [ ] GitHub `mobile-preview`·`mobile-production` Environment에 Expo token, owner, EAS project ID를 등록한다.
-- [ ] 플랫폼별 최초 EAS build를 대화형으로 한 번 실행해 서명 자격 증명을 만든다.
+- [x] Android 최초 EAS build를 실행해 원격 서명 자격 증명을 만들었다.
 
 ```dotenv
 EXPO_PUSH_URL=https://exp.host/--/api/v2/push/send

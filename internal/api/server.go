@@ -105,28 +105,30 @@ type AuthUserDeleter interface {
 }
 
 type Options struct {
-	AllowedOrigins  []string
-	AllowDevAuth    bool
-	DevUserID       string
-	TokenVerifier   TokenVerifier
-	Catalog         catalog.Provider
-	AuthUserDeleter AuthUserDeleter
-	AdminAPIKey     string
-	PublicAppURL    string
-	Logger          *slog.Logger
+	AllowedOrigins   []string
+	AllowDevAuth     bool
+	LocalAuthEnabled bool
+	DevUserID        string
+	TokenVerifier    TokenVerifier
+	Catalog          catalog.Provider
+	AuthUserDeleter  AuthUserDeleter
+	AdminAPIKey      string
+	PublicAppURL     string
+	Logger           *slog.Logger
 }
 
 type Server struct {
-	store           Store
-	allowedOrigins  map[string]struct{}
-	allowDevAuth    bool
-	devUserID       string
-	tokenVerifier   TokenVerifier
-	catalog         catalog.Provider
-	authUserDeleter AuthUserDeleter
-	adminAPIKey     string
-	publicAppURL    string
-	logger          *slog.Logger
+	store            Store
+	allowedOrigins   map[string]struct{}
+	allowDevAuth     bool
+	localAuthEnabled bool
+	devUserID        string
+	tokenVerifier    TokenVerifier
+	catalog          catalog.Provider
+	authUserDeleter  AuthUserDeleter
+	adminAPIKey      string
+	publicAppURL     string
+	logger           *slog.Logger
 }
 
 func NewServer(store Store, options Options) http.Handler {
@@ -136,16 +138,17 @@ func NewServer(store Store, options Options) http.Handler {
 	}
 
 	server := &Server{
-		store:           store,
-		allowedOrigins:  make(map[string]struct{}, len(options.AllowedOrigins)),
-		allowDevAuth:    options.AllowDevAuth,
-		devUserID:       options.DevUserID,
-		tokenVerifier:   options.TokenVerifier,
-		catalog:         options.Catalog,
-		authUserDeleter: options.AuthUserDeleter,
-		adminAPIKey:     strings.TrimSpace(options.AdminAPIKey),
-		publicAppURL:    strings.TrimRight(strings.TrimSpace(options.PublicAppURL), "/"),
-		logger:          logger,
+		store:            store,
+		allowedOrigins:   make(map[string]struct{}, len(options.AllowedOrigins)),
+		allowDevAuth:     options.AllowDevAuth,
+		localAuthEnabled: options.LocalAuthEnabled,
+		devUserID:        options.DevUserID,
+		tokenVerifier:    options.TokenVerifier,
+		catalog:          options.Catalog,
+		authUserDeleter:  options.AuthUserDeleter,
+		adminAPIKey:      strings.TrimSpace(options.AdminAPIKey),
+		publicAppURL:     strings.TrimRight(strings.TrimSpace(options.PublicAppURL), "/"),
+		logger:           logger,
 	}
 	for _, origin := range options.AllowedOrigins {
 		server.allowedOrigins[origin] = struct{}{}
@@ -153,6 +156,10 @@ func NewServer(store Store, options Options) http.Handler {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", server.health)
+	mux.HandleFunc("GET /v1/auth/status", server.localAuthStatus)
+	mux.HandleFunc("POST /v1/auth/register", server.registerLocalAccount)
+	mux.HandleFunc("POST /v1/auth/login", server.loginLocalAccount)
+	mux.HandleFunc("POST /v1/auth/logout", server.authWithoutAccessCheck(server.logoutLocalAccount))
 	mux.HandleFunc("GET /v1/reading-runs", server.auth(server.listReadingRuns))
 	mux.HandleFunc("POST /v1/reading-runs", server.auth(server.createReadingRun))
 	mux.HandleFunc("POST /v1/reading-runs/manual", server.auth(server.createManualReadingRun))
@@ -173,6 +180,7 @@ func NewServer(store Store, options Options) http.Handler {
 	mux.HandleFunc("DELETE /v1/blocks/{userID}", server.auth(server.unblockUser))
 	mux.HandleFunc("POST /v1/reports", server.auth(server.createReport))
 	mux.HandleFunc("GET /v1/me", server.auth(server.getMe))
+	mux.HandleFunc("GET /v1/me/storage-status", server.auth(server.getStorageStatus))
 	mux.HandleFunc("PATCH /v1/me", server.auth(server.updateMe))
 	mux.HandleFunc("GET /v1/me/stats", server.auth(server.getReadingStats))
 	mux.HandleFunc("GET /v1/me/notifications", server.auth(server.getNotificationPreferences))

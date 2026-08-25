@@ -4,8 +4,9 @@ import { Alert, Pressable, Share, StyleSheet, Text, TextInput, View } from 'reac
 
 import { Screen } from '@/components/product/screen';
 import { Radius, Spacing } from '@/constants/theme';
-import { useDeleteUserData, useExportUserData } from '@/features/account/hooks';
+import { useDeleteUserData, useExportUserData, useStorageStatus } from '@/features/account/hooks';
 import { useAuth } from '@/features/auth/auth-provider';
+import { useFailedCount, usePendingCount } from '@/features/reading/hooks';
 import { useTheme } from '@/hooks/use-theme';
 
 export default function AccountDataScreen() {
@@ -13,6 +14,9 @@ export default function AccountDataScreen() {
   const auth = useAuth();
   const exportData = useExportUserData();
   const deleteData = useDeleteUserData();
+  const storageStatus = useStorageStatus();
+  const pendingCount = usePendingCount();
+  const failedCount = useFailedCount();
   const [confirmation, setConfirmation] = useState('');
 
   const shareExport = async () => {
@@ -53,6 +57,39 @@ export default function AccountDataScreen() {
       </View>
 
       <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <View style={styles.statusHeading}>
+          <View style={[styles.statusDot, { backgroundColor: storageStatus.data?.connected ? theme.primary : theme.accent }]} />
+          <View style={styles.statusCopy}>
+            <Text style={[styles.cardTitle, { color: theme.text }]}>
+              {storageStatus.data?.connected ? 'PostgreSQL에 저장 중' : '저장소 연결 확인 필요'}
+            </Text>
+            <Text style={[styles.accountEmail, { color: theme.textSecondary }]}>{auth.session?.user.email}</Text>
+          </View>
+          <Pressable accessibilityRole="button" onPress={() => storageStatus.refetch()} style={[styles.refreshButton, { backgroundColor: theme.backgroundElement }]}>
+            <Text style={[styles.refreshText, { color: theme.primary }]}>새로고침</Text>
+          </Pressable>
+        </View>
+        {storageStatus.data ? (
+          <>
+            <View style={styles.countRow}>
+              <StatusCount label="독서 회차" value={storageStatus.data.readingRuns} color={theme.text} secondary={theme.textSecondary} />
+              <StatusCount label="진척 기록" value={storageStatus.data.progressEntries} color={theme.text} secondary={theme.textSecondary} />
+              <StatusCount label="피드·댓글" value={storageStatus.data.feedEvents + storageStatus.data.comments} color={theme.text} secondary={theme.textSecondary} />
+            </View>
+            <Text style={[styles.savedAt, { color: theme.textSecondary }]}>최근 DB 반영 {new Date(storageStatus.data.lastSavedAt).toLocaleString('ko-KR')}</Text>
+          </>
+        ) : (
+          <Text style={[styles.cardCopy, { color: theme.textSecondary }]}>
+            {storageStatus.isLoading ? '서버 저장 상태를 확인하고 있어요…' : storageStatus.error instanceof Error ? storageStatus.error.message : '서버에 연결하지 못했습니다.'}
+          </Text>
+        )}
+        <View style={[styles.queue, { backgroundColor: theme.backgroundElement }]}>
+          <Text style={[styles.queueText, { color: theme.textSecondary }]}>휴대폰 대기 {pendingCount.data ?? 0}건 · 실패 {failedCount.data ?? 0}건</Text>
+          <Text style={[styles.queueText, { color: theme.textSecondary }]}>로그인 세션은 Android 보안 저장소에서 보호됩니다.</Text>
+        </View>
+      </View>
+
+      <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
         <Text style={[styles.cardTitle, { color: theme.text }]}>데이터 내보내기</Text>
         <Text style={[styles.cardCopy, { color: theme.textSecondary }]}>프로필, 독서 회차, 진척 기록과 내가 작성한 댓글을 JSON 형식으로 준비합니다.</Text>
         <Pressable accessibilityRole="button" disabled={exportData.isPending} onPress={shareExport} style={[styles.primaryButton, { backgroundColor: theme.primary }]}>
@@ -82,10 +119,19 @@ export default function AccountDataScreen() {
       </View>
 
       <View style={[styles.notice, { backgroundColor: theme.backgroundElement }]}>
-        <Text style={[styles.noticeTitle, { color: theme.text }]}>소셜 로그인 계정</Text>
-        <Text style={[styles.noticeCopy, { color: theme.textSecondary }]}>운영 환경에서는 Supabase Auth 삭제와 서비스 데이터 삭제를 함께 처리합니다. 외부 인증 서비스가 일시적으로 실패하면 계정 접근을 막고 Worker가 삭제를 재시도합니다.</Text>
+        <Text style={[styles.noticeTitle, { color: theme.text }]}>개인 서버 계정</Text>
+        <Text style={[styles.noticeCopy, { color: theme.textSecondary }]}>한 개의 계정만 가입할 수 있으며 비밀번호 원문과 로그인 토큰 원문은 서버 DB에 저장되지 않습니다. 계정을 삭제하면 다시 첫 계정을 만들 수 있어요.</Text>
       </View>
     </Screen>
+  );
+}
+
+function StatusCount({ label, value, color, secondary }: { label: string; value: number; color: string; secondary: string }) {
+  return (
+    <View style={styles.countItem}>
+      <Text style={[styles.countValue, { color }]}>{value}</Text>
+      <Text style={[styles.countLabel, { color: secondary }]}>{label}</Text>
+    </View>
   );
 }
 
@@ -106,4 +152,17 @@ const styles = StyleSheet.create({
   notice: { borderRadius: Radius.medium, padding: Spacing.three, gap: 5 },
   noticeTitle: { fontSize: 14, fontWeight: '900' },
   noticeCopy: { fontSize: 12, lineHeight: 18 },
+  statusHeading: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  statusDot: { width: 10, height: 10, borderRadius: 5 },
+  statusCopy: { flex: 1, gap: 2 },
+  accountEmail: { fontSize: 11 },
+  refreshButton: { minHeight: 36, paddingHorizontal: 11, borderRadius: Radius.small, alignItems: 'center', justifyContent: 'center' },
+  refreshText: { fontSize: 11, fontWeight: '900' },
+  countRow: { flexDirection: 'row', gap: 8, marginTop: 5 },
+  countItem: { flex: 1, gap: 2 },
+  countValue: { fontSize: 20, fontWeight: '900' },
+  countLabel: { fontSize: 10 },
+  savedAt: { fontSize: 10 },
+  queue: { borderRadius: Radius.small, padding: 10, gap: 3 },
+  queueText: { fontSize: 10, lineHeight: 15 },
 });

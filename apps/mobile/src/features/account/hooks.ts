@@ -6,6 +6,7 @@ import {
   fetchNotificationPreferences,
   fetchProfile,
   fetchReadingStats,
+  fetchStorageStatus,
   setAnnualGoal,
   updateNotificationPreferences,
   updateProfile,
@@ -13,6 +14,14 @@ import {
 
 export function useProfile() {
   return useQuery({ queryKey: ['profile'], queryFn: fetchProfile });
+}
+
+export function useStorageStatus() {
+  return useQuery({
+    queryKey: ['storage-status'],
+    queryFn: fetchStorageStatus,
+    refetchInterval: 60_000,
+  });
 }
 
 export function useUpdateProfile() {

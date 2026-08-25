@@ -7,8 +7,8 @@ func TestListReturnsOrderedImmutableMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(items) != 5 {
-		t.Fatalf("migration count = %d, want 5", len(items))
+	if len(items) != 6 {
+		t.Fatalf("migration count = %d, want 6", len(items))
 	}
 	for index, item := range items {
 		if item.Version == "" || item.Name == "" || item.SQL == "" || len(item.Checksum) != 64 {

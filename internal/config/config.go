@@ -15,6 +15,7 @@ type Config struct {
 	Port                   string
 	AllowedOrigins         []string
 	AllowDevAuth           bool
+	LocalAuthEnabled       bool
 	DevUserID              string
 	SupabaseURL            string
 	SupabaseIssuer         string
@@ -27,9 +28,13 @@ type Config struct {
 }
 
 func Load() (Config, error) {
-	allowDevAuth, err := strconv.ParseBool(envOr("ALLOW_DEV_AUTH", "true"))
+	allowDevAuth, err := strconv.ParseBool(envOr("ALLOW_DEV_AUTH", "false"))
 	if err != nil {
 		return Config{}, fmt.Errorf("parse ALLOW_DEV_AUTH: %w", err)
+	}
+	localAuthEnabled, err := strconv.ParseBool(envOr("LOCAL_AUTH_ENABLED", "true"))
+	if err != nil {
+		return Config{}, fmt.Errorf("parse LOCAL_AUTH_ENABLED: %w", err)
 	}
 
 	origins := strings.Split(envOr("ALLOWED_ORIGINS", "http://localhost:8081,http://127.0.0.1:8081,http://localhost:19006,http://127.0.0.1:19006"), ",")
@@ -46,16 +51,13 @@ func Load() (Config, error) {
 	if supabaseJWKSURL == "" && supabaseIssuer != "" {
 		supabaseJWKSURL = supabaseIssuer + "/.well-known/jwks.json"
 	}
-	if !allowDevAuth && supabaseIssuer == "" {
-		return Config{}, fmt.Errorf("SUPABASE_URL or SUPABASE_JWT_ISSUER is required when ALLOW_DEV_AUTH=false")
+	if !allowDevAuth && !localAuthEnabled && supabaseIssuer == "" {
+		return Config{}, fmt.Errorf("LOCAL_AUTH_ENABLED or SUPABASE_URL/SUPABASE_JWT_ISSUER is required when ALLOW_DEV_AUTH=false")
 	}
 	serviceRoleKey := strings.TrimSpace(os.Getenv("SUPABASE_SERVICE_ROLE_KEY"))
 	adminAPIKey := strings.TrimSpace(os.Getenv("ADMIN_API_KEY"))
-	if !allowDevAuth && serviceRoleKey == "" {
-		return Config{}, fmt.Errorf("SUPABASE_SERVICE_ROLE_KEY is required when ALLOW_DEV_AUTH=false")
-	}
-	if !allowDevAuth && len(adminAPIKey) < 32 {
-		return Config{}, fmt.Errorf("ADMIN_API_KEY must be at least 32 characters when ALLOW_DEV_AUTH=false")
+	if adminAPIKey != "" && len(adminAPIKey) < 32 {
+		return Config{}, fmt.Errorf("ADMIN_API_KEY must be at least 32 characters when configured")
 	}
 	publicAppURL := strings.TrimRight(strings.TrimSpace(os.Getenv("PUBLIC_APP_URL")), "/")
 	if publicAppURL != "" {
@@ -70,6 +72,7 @@ func Load() (Config, error) {
 		Port:                   envOr("PORT", "8080"),
 		AllowedOrigins:         origins,
 		AllowDevAuth:           allowDevAuth,
+		LocalAuthEnabled:       localAuthEnabled,
 		DevUserID:              envOr("DEV_USER_ID", defaultDevUserID),
 		SupabaseURL:            supabaseURL,
 		SupabaseIssuer:         supabaseIssuer,

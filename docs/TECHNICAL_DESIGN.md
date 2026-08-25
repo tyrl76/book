@@ -1,7 +1,7 @@
 # 책결 기술 설계서
 
 - 문서 상태: MVP 구현 기준안
-- 기준일: 2026-08-20
+- 기준일: 2026-08-25
 - 권장 구조: React Native 모바일 + Go 모듈러 모놀리스 + PostgreSQL
 
 ## 1. 기술 목표
@@ -22,7 +22,7 @@
 | API | Go 표준 HTTP 또는 경량 라우터 | 명시적 동시성·트랜잭션, 작은 운영 면적 |
 | DB | PostgreSQL | 관계·권한·피드 조회와 트랜잭션에 적합 |
 | 파일 | S3 호환 오브젝트 스토리지 | 프로필·메모 이미지 저장 |
-| 인증 | Supabase Auth PKCE + 서버 JWT 검증 | Apple·Google·카카오 계정 연결, JWKS 키 회전 |
+| 인증 | 개인 계정 + bcrypt + 해시 세션 | 외부 Auth 없이 한 명이 안전하게 사용, 향후 JWT 검증 병행 가능 |
 | 푸시 | FCM을 통한 Android/APNs 전달 | 양 플랫폼 알림 통합 |
 | 배포 | 컨테이너 1개 + 관리형 PostgreSQL | 초기 운영 단순화 |
 | 관측 | 구조화 로그, 오류 추적, OpenTelemetry | 개인정보를 제외한 요청·잡 추적 |
@@ -37,10 +37,11 @@ Flutter가 팀의 주력 기술이면 모바일만 교체해도 API와 데이터
 - Expo Camera 기반 ISBN 바코드 인식
 - Go 표준 `net/http`, pgx 5, PostgreSQL 17
 - PostgreSQL Outbox와 별도 Go Worker
-- Supabase Auth PKCE 소셜 로그인과 Go JWKS/JWT 검증
+- 첫 계정만 허용하는 Go 인증 API, bcrypt 자격 증명, 30일 불투명 세션
+- Android SecureStore 세션과 PostgreSQL 토큰 해시 저장
 - Kakao 도서 검색 API와 PostgreSQL 로컬 카탈로그 폴백
 
-현재 구현은 `소셜 로그인 → 책 검색/ISBN 스캔 → 독서 회차 생성 → 진척 기록 → SQLite 대기열 → Go API → PostgreSQL → 피드/Outbox`의 수직 흐름을 완성했다. 이 흐름을 나누면 오프라인 재전송 때 진척만 반영되거나 같은 피드가 중복되는 현상이 생기므로 `client_operation_id` 고유 제약과 단일 DB 트랜잭션을 사용한다.
+현재 구현은 `개인 로그인 → 책 검색/ISBN 스캔 → 독서 회차 생성 → 진척 기록 → SQLite 대기열 → Go API → PostgreSQL → 피드/Outbox`의 수직 흐름을 완성했다. 이 흐름을 나누면 오프라인 재전송 때 진척만 반영되거나 같은 피드가 중복되는 현상이 생기므로 `client_operation_id` 고유 제약과 단일 DB 트랜잭션을 사용한다.
 
 ## 3. 시스템 구조
 
@@ -220,12 +221,19 @@ REST와 JSON을 사용하고 `/v1`에서 시작한다. 모든 쓰기 요청은 `
 ### 7.1 인증·프로필
 
 ```text
+GET    /v1/auth/status
+POST   /v1/auth/register
+POST   /v1/auth/login
+POST   /v1/auth/logout
 POST   /v1/me/bootstrap
 GET    /v1/me
 PATCH  /v1/me
 DELETE /v1/me
 GET    /v1/me/export
+GET    /v1/me/storage-status
 ```
+
+최초 가입은 PostgreSQL advisory transaction lock으로 직렬화해 동시에 두 계정이 만들어지는 것을 막는다. 비밀번호는 bcrypt 해시만 보관하고, 256비트 무작위 세션 토큰은 클라이언트에 한 번만 반환한 뒤 서버에는 SHA-256 해시만 저장한다. 기본 만료는 30일이며 로그아웃·계정 삭제 시 폐기한다.
 
 ### 7.2 친구·그룹
 

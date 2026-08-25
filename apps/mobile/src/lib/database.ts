@@ -3,8 +3,8 @@ import { Platform } from 'react-native';
 
 import type { FeedEvent, PendingProgressOperation, ReadingRun } from '@/types/domain';
 
-const databaseVersion = 3;
-const devUserID = '11111111-1111-4111-8111-111111111111';
+const databaseVersion = 4;
+const legacyDevUserID = '11111111-1111-4111-8111-111111111111';
 
 async function withWriteTransaction(
   db: SQLiteDatabase,
@@ -16,58 +16,6 @@ async function withWriteTransaction(
   }
   await db.withExclusiveTransactionAsync(task);
 }
-
-const demoRuns: ReadingRun[] = [
-  {
-    id: 'a1111111-1111-4111-8111-111111111111',
-    title: '아무튼, 메모',
-    author: '정혜윤',
-    coverColor: '#B65D48',
-    status: 'reading',
-    progressBasis: 'pages',
-    currentValue: 86,
-    totalValue: 272,
-    normalizedProgress: 3162,
-    visibility: 'friends',
-    progressPrecision: 'milestone',
-    autoShare: true,
-    runNumber: 1,
-    startedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
-
-const demoFeed: FeedEvent[] = [
-  {
-    id: 'b2222222-2222-4222-8222-222222222222',
-    actorId: '22222222-2222-4222-8222-222222222222',
-    actorNickname: '지우',
-    title: '불편한 편의점',
-    author: '김호연',
-    coverColor: '#406B62',
-    type: 'milestone_50',
-    normalizedProgress: 5000,
-    note: '이제야 서로의 마음이 조금 보이는 것 같아.',
-    reactionCount: 1,
-    reactedByViewer: false,
-    commentCount: 0,
-    occurredAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: 'b3333333-3333-4333-8333-333333333333',
-    actorId: '33333333-3333-4333-8333-333333333333',
-    actorNickname: '현우',
-    title: '물고기는 존재하지 않는다',
-    author: '룰루 밀러',
-    coverColor: '#304D75',
-    type: 'milestone_75',
-    normalizedProgress: 7500,
-    reactionCount: 0,
-    reactedByViewer: false,
-    commentCount: 0,
-    occurredAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-  },
-];
 
 export async function migrateDatabase(db: SQLiteDatabase) {
   const row = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
@@ -116,7 +64,7 @@ export async function migrateDatabase(db: SQLiteDatabase) {
         PRIMARY KEY (owner_id, id)
       );
       INSERT INTO reading_runs_cache (id, owner_id, payload, updated_at)
-        SELECT id, '${devUserID}', payload, updated_at FROM reading_runs_cache_v1;
+        SELECT id, '${legacyDevUserID}', payload, updated_at FROM reading_runs_cache_v1;
       DROP TABLE reading_runs_cache_v1;
 
       ALTER TABLE feed_cache RENAME TO feed_cache_v1;
@@ -128,7 +76,7 @@ export async function migrateDatabase(db: SQLiteDatabase) {
         PRIMARY KEY (owner_id, id)
       );
       INSERT INTO feed_cache (id, owner_id, payload, occurred_at)
-        SELECT id, '${devUserID}', payload, occurred_at FROM feed_cache_v1;
+        SELECT id, '${legacyDevUserID}', payload, occurred_at FROM feed_cache_v1;
       DROP TABLE feed_cache_v1;
 
       ALTER TABLE pending_operations RENAME TO pending_operations_v1;
@@ -148,7 +96,7 @@ export async function migrateDatabase(db: SQLiteDatabase) {
       INSERT INTO pending_operations (
         client_operation_id, owner_id, reading_run_id, current_value, recorded_at,
         note, status, attempts, last_error, created_at
-      ) SELECT client_operation_id, '${devUserID}', reading_run_id, current_value, recorded_at,
+      ) SELECT client_operation_id, '${legacyDevUserID}', reading_run_id, current_value, recorded_at,
                note, status, attempts, last_error, created_at
           FROM pending_operations_v1;
       DROP TABLE pending_operations_v1;
@@ -162,23 +110,25 @@ export async function migrateDatabase(db: SQLiteDatabase) {
     `);
   }
 
+  if (currentVersion < 4) {
+    await db.execAsync(`
+      DELETE FROM pending_operations
+        WHERE reading_run_id = 'a1111111-1111-4111-8111-111111111111';
+      DELETE FROM reading_runs_cache
+        WHERE id = 'a1111111-1111-4111-8111-111111111111';
+      DELETE FROM feed_cache
+        WHERE id IN (
+          'b2222222-2222-4222-8222-222222222222',
+          'b3333333-3333-4333-8333-333333333333'
+        );
+    `);
+  }
+
   await db.execAsync(`
     CREATE INDEX IF NOT EXISTS reading_runs_cache_owner_idx ON reading_runs_cache(owner_id, updated_at DESC);
     CREATE INDEX IF NOT EXISTS feed_cache_owner_idx ON feed_cache(owner_id, occurred_at DESC);
     CREATE INDEX IF NOT EXISTS pending_operations_owner_idx ON pending_operations(owner_id, status, created_at);
   `);
-
-  const runCount = await db.getFirstAsync<{ count: number }>(
-    'SELECT COUNT(*) AS count FROM reading_runs_cache WHERE owner_id = ?',
-    devUserID,
-  );
-  if ((runCount?.count ?? 0) === 0) await saveReadingRuns(db, devUserID, demoRuns);
-
-  const feedCount = await db.getFirstAsync<{ count: number }>(
-    'SELECT COUNT(*) AS count FROM feed_cache WHERE owner_id = ?',
-    devUserID,
-  );
-  if ((feedCount?.count ?? 0) === 0) await saveFeed(db, devUserID, demoFeed);
 
   await db.execAsync(`PRAGMA user_version = ${databaseVersion}`);
 }

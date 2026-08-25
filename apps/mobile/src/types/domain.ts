@@ -171,3 +171,26 @@ export type PendingProgressOperation = {
   durationSeconds: number;
   attempts: number;
 };
+
+export type AuthUser = {
+  id: string;
+  email: string;
+  nickname: string;
+};
+
+export type AuthSession = {
+  token: string;
+  expiresAt: string;
+  user: AuthUser;
+};
+
+export type StorageStatus = {
+  database: string;
+  connected: boolean;
+  readingRuns: number;
+  progressEntries: number;
+  feedEvents: number;
+  comments: number;
+  lastSavedAt: string;
+  checkedAt: string;
+};

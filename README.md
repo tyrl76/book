@@ -7,7 +7,7 @@
 ## 현재 구현
 
 - Expo 57 + React Native + TypeScript 앱, 시스템·라이트·다크 테마
-- Supabase PKCE 로그인 UI와 Go JWT/JWKS 검증, 로컬 개발 인증
+- 첫 계정만 허용하는 개인 로그인, bcrypt 비밀번호 해시, 30일 불투명 세션과 Android 보안 저장소
 - Kakao 도서 검색·ISBN 카메라 스캔·직접 등록과 로컬 폴백
 - 종이책·전자책·오디오북, 다권 책장, 5개 독서 상태와 재독 회차
 - 진척·메모·타이머·과거 기록, 네이티브 SQLite 오프라인 큐와 멱등 재전송
@@ -15,7 +15,7 @@
 - 시작·25·50·75·완독 피드, 응원, 위치 기반 스포일러 댓글
 - 책별 공개 범위와 진척 정밀도, 신고, 프로필, 통계, 목표·주간 리포트
 - Expo 푸시 토큰·알림 설정·전달 큐·재시도 Worker
-- 내 데이터 JSON 내보내기와 Supabase Auth·PostgreSQL 계정 삭제 재시도
+- PostgreSQL 저장 상태·건수 확인, 내 데이터 JSON 내보내기와 개인 계정 완전 삭제
 - 운영자 신고 콘솔, 콘텐츠 숨김·제재·복원과 감사 로그
 
 기능별 실제 완료 범위와 남은 작업은 [구현 현황](docs/IMPLEMENTATION_STATUS.md)을 기준으로 한다. Kakao 도서 검색에는 전체 페이지 수가 없을 수 있어 사용자가 쪽수·퍼센트·오디오 시간을 선택한다. 웹은 개발·QA용이며 첫 출시는 iOS/Android를 우선한다.
@@ -47,18 +47,15 @@ Expo 터미널에서 `w`를 누르면 웹, `a`는 Android, `i`는 iOS가 열린�
 EXPO_PUBLIC_API_URL=http://192.168.0.10:8080
 ```
 
-개발 PostgreSQL은 호스트 `55432`를 사용한다. 초기 컨테이너에는 `migrations/000001`부터 `000005`와 개발 시드가 순서대로 적용된다. 기존 볼륨에 새 마이그레이션을 반영할 때는 각 SQL을 운영 절차에 따라 직접 적용하고, 데이터가 있는 볼륨을 단순 삭제하지 않는다.
+개발 PostgreSQL은 호스트 `55432`를 사용한다. 초기 컨테이너에는 `migrations/000001`부터 `000006`이 적용되며 샘플 사용자나 책은 넣지 않는다. 앱을 처음 열면 닉네임·이메일·10자 이상 비밀번호로 최초 개인 계정을 만든다. 기존 볼륨에 새 마이그레이션을 반영할 때는 migration runner를 사용하고, 데이터가 있는 볼륨을 단순 삭제하지 않는다.
 
-## 외부 서비스 연결
+## 개인 서버 설정
 
-Supabase 없이 실행하면 앱과 API가 시드 개발 사용자로 동작한다. 운영 인증을 연결할 때 서버에 다음 값을 주입한다.
+기본 모드는 Supabase 없이 한 명만 가입할 수 있는 개인 계정이다. 개발 사용자 우회 헤더는 기본적으로 꺼져 있다.
 
 ```dotenv
 ALLOW_DEV_AUTH=false
-SUPABASE_URL=https://PROJECT_REF.supabase.co
-SUPABASE_JWT_ISSUER=https://PROJECT_REF.supabase.co/auth/v1
-SUPABASE_JWKS_URL=https://PROJECT_REF.supabase.co/auth/v1/.well-known/jwks.json
-SUPABASE_SERVICE_ROLE_KEY=서버_전용_service_role_키
+LOCAL_AUTH_ENABLED=true
 KAKAO_REST_API_KEY=서버용_REST_API_키
 EXPO_PUSH_URL=https://exp.host/--/api/v2/push/send
 ADMIN_API_KEY=32자_이상의_운영자_비밀
@@ -69,14 +66,12 @@ PUBLIC_APP_URL=https://links.example.com
 
 ```dotenv
 EXPO_PUBLIC_API_URL=https://api.example.com
-EXPO_PUBLIC_SUPABASE_URL=https://PROJECT_REF.supabase.co
-EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 EXPO_PUBLIC_APP_LINK_DOMAIN=links.example.com
 ```
 
-Supabase에서 카카오·Google·Apple 공급자와 `bookgyeol://auth/callback`을 설정한다. Expo/EAS projectId와 APNs·FCM 자격 증명이 있어야 실제 기기 푸시 토큰이 발급된다. `service_role` 키, Kakao REST API 키, DB 접속 문자열은 앱 번들에 넣지 않는다. `EXPO_PUSH_URL`이 비어 있으면 Worker는 전달 대상을 큐에 만들지만 외부로 발송하지 않는다.
+휴대폰과 PC는 Tailscale에 연결하고 `EXPO_PUBLIC_API_URL`에는 `tailscale serve`의 HTTPS 주소를 사용한다. Funnel은 필요하지 않다. Expo/EAS projectId와 APNs·FCM 자격 증명이 있어야 실제 기기 푸시 토큰이 발급된다. Kakao REST API 키와 DB 접속 문자열은 앱 번들에 넣지 않는다. `EXPO_PUSH_URL`이 비어 있으면 Worker는 전달 대상을 큐에 만들지만 외부로 발송하지 않는다.
 
-커스텀 스킴 OAuth, App Links와 푸시는 Expo Go가 아닌 development build 또는 배포 빌드에서 검증한다. `ALLOW_DEV_AUTH=false`인데 Supabase URL·서비스 역할 키·32자 이상 운영자 키가 없으면 API가 시작 단계에서 실패한다. 계정 삭제는 Supabase Auth 호출이 일시 실패하면 202를 반환하고 Worker가 재시도하며, 삭제 요청 시점부터 해당 사용자 API와 푸시를 차단한다.
+App Links와 푸시는 Expo Go가 아닌 development build 또는 배포 빌드에서 검증한다. 비밀번호 원문은 저장하지 않으며 앱 세션은 Android Keystore 기반 SecureStore에, 서버에는 토큰의 SHA-256 해시만 저장한다. 계정을 삭제하면 서비스 데이터·자격 증명·세션이 함께 삭제되어 다시 최초 가입이 가능해진다.
 
 로컬 운영 콘솔은 `http://localhost:8080/admin`이다. `ADMIN_API_KEY`를 브라우저 탭 세션에만 보관하며, 운영에서는 이 경로를 IAP/SSO 또는 제한된 네트워크 뒤에 둔다. HTTPS 초대 링크에 필요한 도메인 파일은 `deploy/app-links` 템플릿을 사용한다.
 

@@ -9,6 +9,7 @@ Expo 57, React Native, TypeScript로 구현한 책결 모바일 앱이다.
 - `나`: 개인 책장 요약과 설정 진입점
 - `ISBN 스캔`: Expo Camera 기반 EAN-13/EAN-8 인식
 - 오프라인: SQLite에 먼저 저장한 뒤 동일 `clientOperationId`로 Go API에 재전송
+- 개인 계정: 첫 가입·이메일 로그인, Android SecureStore 세션, PostgreSQL 저장 상태 확인
 
 서버가 꺼져 있어도 내 기록은 로컬 캐시에 반영되고 동기화 대기 수가 표시된다. 앱이 활성화되면 대기 작업을 생성 순서대로 다시 보낸다.
 
@@ -16,7 +17,6 @@ Expo 57, React Native, TypeScript로 구현한 책결 모바일 앱이다.
 
 ```dotenv
 EXPO_PUBLIC_API_URL=http://127.0.0.1:8080
-EXPO_PUBLIC_DEV_USER_ID=11111111-1111-4111-8111-111111111111
 ```
 
 Android 에뮬레이터는 API URL을 지정하지 않으면 `http://10.0.2.2:8080`을 사용한다. 실제 기기는 개발 PC의 LAN 주소가 필요하다.
@@ -30,4 +30,4 @@ pnpm typecheck
 pnpm lint
 ```
 
-현재 인증 헤더는 로컬 개발용이다. Supabase 로그인과 안전한 세션 저장, Go 서버의 JWT 검증은 다음 제품 슬라이스에서 연결한다.
+앱을 처음 열면 한 번만 개인 계정을 만들 수 있다. 이후에는 같은 이메일·비밀번호로 로그인하며, 네이티브 세션은 Android 보안 저장소에 보관한다. 샘플 데이터는 자동 생성하지 않는다.

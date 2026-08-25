@@ -15,7 +15,7 @@ export default function TabsLayout() {
       </View>
     );
   }
-  if (auth.configured && !auth.session) return <Redirect href="/sign-in" />;
+  if (!auth.session) return <Redirect href="/sign-in" />;
   return <AppTabs />;
 }
 

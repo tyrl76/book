@@ -7,13 +7,29 @@ import (
 
 func TestLoadRequiresSupabaseWhenDevAuthDisabled(t *testing.T) {
 	t.Setenv("ALLOW_DEV_AUTH", "false")
+	t.Setenv("LOCAL_AUTH_ENABLED", "false")
 	t.Setenv("SUPABASE_URL", "")
 	t.Setenv("SUPABASE_JWT_ISSUER", "")
 	t.Setenv("SUPABASE_JWKS_URL", "")
 
 	_, err := Load()
-	if err == nil || !strings.Contains(err.Error(), "SUPABASE_URL") {
+	if err == nil || !strings.Contains(err.Error(), "LOCAL_AUTH_ENABLED") {
 		t.Fatalf("error = %v, want missing Supabase configuration", err)
+	}
+}
+
+func TestLoadAllowsLocalAuthWithoutSupabase(t *testing.T) {
+	t.Setenv("ALLOW_DEV_AUTH", "false")
+	t.Setenv("LOCAL_AUTH_ENABLED", "true")
+	t.Setenv("SUPABASE_URL", "")
+	t.Setenv("SUPABASE_JWT_ISSUER", "")
+
+	settings, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !settings.LocalAuthEnabled || settings.AllowDevAuth {
+		t.Fatalf("unexpected auth settings: %#v", settings)
 	}
 }
 

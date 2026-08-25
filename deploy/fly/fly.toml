@@ -12,6 +12,7 @@ kill_timeout = "15s"
 
 [env]
   ALLOW_DEV_AUTH = "false"
+  LOCAL_AUTH_ENABLED = "true"
   PORT = "8080"
 
 [processes]

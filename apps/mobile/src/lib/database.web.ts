@@ -32,64 +32,6 @@ function writeJSON(key: string, value: unknown) {
   }
 }
 
-function demoRuns(): ReadingRun[] {
-  const now = new Date();
-  return [
-    {
-      id: 'a1111111-1111-4111-8111-111111111111',
-      title: '아무튼, 메모',
-      author: '정혜윤',
-      coverColor: '#B65D48',
-      status: 'reading',
-      progressBasis: 'pages',
-      currentValue: 86,
-      totalValue: 272,
-      normalizedProgress: 3162,
-      visibility: 'friends',
-      progressPrecision: 'milestone',
-      autoShare: true,
-      runNumber: 1,
-      startedAt: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-      updatedAt: now.toISOString(),
-    },
-  ];
-}
-
-function demoFeed(): FeedEvent[] {
-  const now = Date.now();
-  return [
-    {
-      id: 'b2222222-2222-4222-8222-222222222222',
-      actorId: '22222222-2222-4222-8222-222222222222',
-      actorNickname: '지우',
-      title: '불편한 편의점',
-      author: '김호연',
-      coverColor: '#406B62',
-      type: 'milestone_50',
-      normalizedProgress: 5000,
-      note: '이제야 서로의 마음이 조금 보이는 것 같아.',
-      reactionCount: 1,
-      reactedByViewer: false,
-      commentCount: 0,
-      occurredAt: new Date(now - 2 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      id: 'b3333333-3333-4333-8333-333333333333',
-      actorId: '33333333-3333-4333-8333-333333333333',
-      actorNickname: '현우',
-      title: '물고기는 존재하지 않는다',
-      author: '룰루 밀러',
-      coverColor: '#304D75',
-      type: 'milestone_75',
-      normalizedProgress: 7500,
-      reactionCount: 0,
-      reactedByViewer: false,
-      commentCount: 0,
-      occurredAt: new Date(now - 24 * 60 * 60 * 1000).toISOString(),
-    },
-  ];
-}
-
 export async function migrateDatabase(_db: AppDatabase) {}
 
 export async function saveReadingRuns(_db: AppDatabase, ownerID: string, items: ReadingRun[]) {
@@ -97,7 +39,7 @@ export async function saveReadingRuns(_db: AppDatabase, ownerID: string, items: 
 }
 
 export async function loadReadingRuns(_db: AppDatabase, ownerID: string): Promise<ReadingRun[]> {
-  return readJSON(storageKey('reading-runs', ownerID), demoRuns());
+  return readJSON(storageKey('reading-runs', ownerID), []);
 }
 
 export async function saveFeed(_db: AppDatabase, ownerID: string, items: FeedEvent[]) {
@@ -105,7 +47,7 @@ export async function saveFeed(_db: AppDatabase, ownerID: string, items: FeedEve
 }
 
 export async function loadFeed(_db: AppDatabase, ownerID: string): Promise<FeedEvent[]> {
-  return readJSON(storageKey('feed', ownerID), demoFeed());
+  return readJSON(storageKey('feed', ownerID), []);
 }
 
 export async function enqueueProgress(
@@ -121,7 +63,7 @@ export async function enqueueProgress(
   }
 
   const runsKey = storageKey('reading-runs', ownerID);
-  const runs = readJSON<ReadingRun[]>(runsKey, demoRuns());
+  const runs = readJSON<ReadingRun[]>(runsKey, []);
   const updatedRuns = runs.map((run) =>
     run.id === operation.readingRunId
       ? {

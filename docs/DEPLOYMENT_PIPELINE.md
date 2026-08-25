@@ -1,6 +1,6 @@
 # 책결 배포 파이프라인
 
-기준일: 2026-08-24
+기준일: 2026-08-25
 
 ## 1. 확정 배포 구조
 
@@ -27,7 +27,7 @@ main CI 성공
 - 모바일: Expo SDK 57, EAS Build/Submit
 - 서버: 동일한 Docker 이미지에서 Go API와 Worker를 별도 Fly.io process group으로 실행
 - 데이터베이스: PostgreSQL 17 호환 관리형 DB
-- 인증: 스테이징·운영을 분리한 Supabase
+- 인증: 개인 배포는 PostgreSQL 로컬 계정, 공개 서비스 확장 시 Supabase JWT 병행 가능
 - CI/CD: GitHub Actions와 GitHub Environments
 
 Fly.io는 API와 상시 Worker를 같은 이미지의 별도 Machine으로 운영할 수 있어 현재 outbox 구조와 잘 맞는다. Worker가 0대로 축소되면 알림과 계정 삭제가 처리되지 않으므로 `worker=1`을 유지한다.
@@ -118,6 +118,7 @@ fly apps create bookgyeol-production
 
 ```text
 DATABASE_URL
+LOCAL_AUTH_ENABLED
 SUPABASE_URL
 SUPABASE_JWT_ISSUER
 SUPABASE_JWKS_URL
@@ -129,7 +130,7 @@ PUBLIC_APP_URL
 ALLOWED_ORIGINS
 ```
 
-`ALLOW_DEV_AUTH=false`와 `PORT=8080`은 `fly.toml`에 안전 기본값으로 고정돼 있다. production에서 개발 인증이 켜지면 임의 사용자 헤더 접근이 가능해지므로 secret으로 덮어쓰지 않는다.
+`ALLOW_DEV_AUTH=false`와 `PORT=8080`은 `fly.toml`에 안전 기본값으로 고정돼 있다. 개인 배포는 `LOCAL_AUTH_ENABLED=true`를 사용한다. production에서 개발 인증이 켜지면 임의 사용자 헤더 접근이 가능해지므로 secret으로 덮어쓰지 않는다.
 
 앱별 deploy token을 만들고 해당 GitHub Environment의 `FLY_API_TOKEN`에 저장한다. 개인 전체 권한 token을 CI에 넣지 않는다.
 
@@ -142,7 +143,7 @@ fly scale count api=1 worker=1 -a bookgyeol-production
 
 DB는 Fly 앱과 가까운 리전에 두고 TLS 연결 문자열을 사용한다. `deploy/fly/fly.toml`의 기본 primary region은 한국 사용자를 고려해 `nrt`이며, DB 리전이 다르면 함께 변경한다.
 
-기존 스키마를 새 migration runner에 연결할 때는 자동으로 baseline하지 않는다. 빈 DB에는 runner가 `000001`부터 적용한다. 이미 테이블이 있는 DB는 실제 스키마와 migration 5개가 일치하는지 먼저 감사한 뒤 별도 baseline 절차를 만들어야 한다. 불완전한 DB를 baseline하면 누락된 컬럼이 배포 후 런타임 오류로 나타날 수 있다.
+기존 스키마를 새 migration runner에 연결할 때는 자동으로 baseline하지 않는다. 빈 DB에는 runner가 `000001`부터 적용한다. 이미 테이블이 있는 DB는 실제 스키마와 migration 6개가 일치하는지 먼저 감사한 뒤 별도 baseline 절차를 만들어야 한다. 불완전한 DB를 baseline하면 누락된 컬럼이 배포 후 런타임 오류로 나타날 수 있다.
 
 ## 6. Expo/EAS 최초 1회 설정
 
@@ -159,10 +160,10 @@ npx eas-cli init
 
 ```text
 EXPO_PUBLIC_API_URL
-EXPO_PUBLIC_SUPABASE_URL
-EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 EXPO_PUBLIC_APP_LINK_DOMAIN
 ```
+
+개인 계정 빌드에는 Supabase 공개 변수가 필요하지 않다. 소셜 로그인을 다시 도입하는 공개 서비스 빌드에서만 Supabase 변수를 추가한다.
 
 CI의 비대화형 빌드 전에 로컬에서 플랫폼별 최초 빌드를 한 번 실행해 Android keystore와 iOS 인증서·provisioning profile을 EAS에 생성한다.
 
