@@ -20,9 +20,6 @@ services:
 
   migrate:
     image: bookgyeol:${BOOKGYEOL_IMAGE_TAG:-latest}
-    build:
-      context: ../..
-      dockerfile: Dockerfile
     command: ["/app/migrate"]
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-book}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-book}?sslmode=disable
@@ -35,6 +32,9 @@ services:
 
   api:
     image: bookgyeol:${BOOKGYEOL_IMAGE_TAG:-latest}
+    build:
+      context: ../..
+      dockerfile: Dockerfile
     command: ["/app/api"]
     restart: unless-stopped
     environment: &app_environment
