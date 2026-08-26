@@ -55,6 +55,18 @@ func TestAdminOverviewRequiresKeyAndReturnsMetrics(t *testing.T) {
 	}
 }
 
+func TestAdminOverviewAllowsExplicitDevelopmentOpenAccess(t *testing.T) {
+	store := &fakeAdminOverviewStore{overview: AdminStorageOverview{Users: 1}}
+	handler := NewServer(store, Options{AdminOpenAccess: true})
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/v1/admin/overview", nil))
+
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"users":1`) {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+}
+
 func TestRequestLogCapturesStatusWithoutQuery(t *testing.T) {
 	buffer := NewAdminLogBuffer(10)
 	handler := NewServer(&fakeStore{}, Options{AdminLogBuffer: buffer})
@@ -114,5 +126,15 @@ func TestAdminConsoleIncludesOperationsViews(t *testing.T) {
 	}
 	if !strings.Contains(response.Header().Get("Content-Security-Policy"), "frame-ancestors 'none'") {
 		t.Fatal("admin console missing restrictive content security policy")
+	}
+}
+
+func TestAdminConsoleAutoConnectsInDevelopmentOpenAccess(t *testing.T) {
+	handler := NewServer(&fakeStore{}, Options{AdminOpenAccess: true})
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/admin", nil))
+
+	if !strings.Contains(response.Body.String(), "const openAccess=true") {
+		t.Fatal("admin console must enable automatic development access")
 	}
 }

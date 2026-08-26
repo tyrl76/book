@@ -51,6 +51,7 @@ services:
       ALLOW_DEV_AUTH: "false"
       LOCAL_AUTH_ENABLED: "true"
       ADMIN_API_KEY: ${ADMIN_API_KEY:?ADMIN_API_KEY is required}
+      ADMIN_OPEN_ACCESS: ${ADMIN_OPEN_ACCESS:-false}
       PUBLIC_APP_URL: https://${APP_DOMAIN:?APP_DOMAIN is required}
       ALLOWED_ORIGINS: https://${APP_DOMAIN}
       KAKAO_REST_API_KEY: ${KAKAO_REST_API_KEY:-}
@@ -107,7 +108,7 @@ services:
       - "443:443"
       - "443:443/udp"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./${CADDYFILE_NAME:-Caddyfile}:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:

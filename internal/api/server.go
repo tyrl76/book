@@ -114,6 +114,7 @@ type Options struct {
 	Catalog          catalog.Provider
 	AuthUserDeleter  AuthUserDeleter
 	AdminAPIKey      string
+	AdminOpenAccess  bool
 	PublicAppURL     string
 	Logger           *slog.Logger
 	AdminLogBuffer   *AdminLogBuffer
@@ -129,6 +130,7 @@ type Server struct {
 	catalog          catalog.Provider
 	authUserDeleter  AuthUserDeleter
 	adminAPIKey      string
+	adminOpenAccess  bool
 	publicAppURL     string
 	logger           *slog.Logger
 	adminLogs        *AdminLogBuffer
@@ -156,6 +158,7 @@ func NewServer(store Store, options Options) http.Handler {
 		catalog:          options.Catalog,
 		authUserDeleter:  options.AuthUserDeleter,
 		adminAPIKey:      strings.TrimSpace(options.AdminAPIKey),
+		adminOpenAccess:  options.AdminOpenAccess,
 		publicAppURL:     strings.TrimRight(strings.TrimSpace(options.PublicAppURL), "/"),
 		logger:           logger,
 		adminLogs:        adminLogs,
@@ -389,18 +392,20 @@ type adminHandler func(http.ResponseWriter, *http.Request, string)
 
 func (s *Server) adminAuth(next adminHandler) http.HandlerFunc {
 	return func(response http.ResponseWriter, request *http.Request) {
-		provided := strings.TrimSpace(request.Header.Get("X-Admin-Key"))
-		if s.adminAPIKey == "" {
-			writeError(response, http.StatusServiceUnavailable, "admin_unavailable", "운영자 API가 설정되지 않았습니다")
-			return
-		}
-		if len(provided) != len(s.adminAPIKey) || subtle.ConstantTimeCompare([]byte(provided), []byte(s.adminAPIKey)) != 1 {
-			writeError(response, http.StatusUnauthorized, "invalid_admin_key", "운영자 인증을 확인해 주세요")
-			return
+		if !s.adminOpenAccess {
+			provided := strings.TrimSpace(request.Header.Get("X-Admin-Key"))
+			if s.adminAPIKey == "" {
+				writeError(response, http.StatusServiceUnavailable, "admin_unavailable", "운영자 API가 설정되지 않았습니다")
+				return
+			}
+			if len(provided) != len(s.adminAPIKey) || subtle.ConstantTimeCompare([]byte(provided), []byte(s.adminAPIKey)) != 1 {
+				writeError(response, http.StatusUnauthorized, "invalid_admin_key", "운영자 인증을 확인해 주세요")
+				return
+			}
 		}
 		operatorID := strings.TrimSpace(request.Header.Get("X-Admin-ID"))
 		if operatorID == "" {
-			operatorID = "operator"
+			operatorID = "development"
 		}
 		if len(operatorID) > 100 {
 			writeError(response, http.StatusBadRequest, "invalid_admin_id", "운영자 식별자를 확인해 주세요")

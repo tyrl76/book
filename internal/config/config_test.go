@@ -33,6 +33,20 @@ func TestLoadAllowsLocalAuthWithoutSupabase(t *testing.T) {
 	}
 }
 
+func TestLoadEnablesAdminOpenAccessExplicitly(t *testing.T) {
+	t.Setenv("ALLOW_DEV_AUTH", "false")
+	t.Setenv("LOCAL_AUTH_ENABLED", "true")
+	t.Setenv("ADMIN_OPEN_ACCESS", "true")
+
+	settings, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !settings.AdminOpenAccess {
+		t.Fatal("AdminOpenAccess = false, want true")
+	}
+}
+
 func TestLoadDerivesSupabaseIssuerAndJWKS(t *testing.T) {
 	t.Setenv("ALLOW_DEV_AUTH", "false")
 	t.Setenv("SUPABASE_URL", "https://project.supabase.co/")

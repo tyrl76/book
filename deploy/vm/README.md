@@ -19,6 +19,24 @@ curl --fail --show-error "https://${APP_DOMAIN}/healthz"
 
 PostgreSQL은 호스트 포트를 공개하지 않고 내부 Docker 네트워크에서만 접근한다. `/admin`과 `/v1/admin/*`은 Caddy Basic Auth와 애플리케이션의 `ADMIN_API_KEY`로 이중 보호한다. 빈 개인 DB를 제3자가 먼저 선점하지 못하도록 `/v1/auth/register`도 Basic Auth로 보호하며, 최초 계정은 운영자가 인증된 요청으로 생성한다.
 
+## 개발 모드 무인증 접근
+
+개인 개발 중 브라우저 인증, `ADMIN_API_KEY`, 앱 최초 가입 제한을 모두 생략하려면 VM의 `.env`에 다음 두 값을 설정한다.
+
+```dotenv
+ADMIN_OPEN_ACCESS=true
+CADDYFILE_NAME=Caddyfile.dev
+```
+
+그다음 API와 Caddy를 다시 생성한다.
+
+```bash
+docker compose build api
+docker compose up -d --force-recreate api worker caddy
+```
+
+이 모드에서는 `/admin`, `/v1/admin/*`, `/v1/auth/register`가 공개 인터넷에서 인증 없이 열리므로 개인 개발 단계에서만 사용한다. 운영 전환 전에는 `ADMIN_OPEN_ACCESS=false`, `CADDYFILE_NAME=Caddyfile`로 되돌리고 서비스를 다시 생성한다. 값을 되돌리지 않으면 누구나 운영 로그를 열람하고 최초 계정을 생성할 수 있다.
+
 ## 업데이트
 
 ```bash

@@ -78,6 +78,7 @@ func main() {
 		Catalog:          catalogProvider,
 		AuthUserDeleter:  authUserDeleter,
 		AdminAPIKey:      settings.AdminAPIKey,
+		AdminOpenAccess:  settings.AdminOpenAccess,
 		PublicAppURL:     settings.PublicAppURL,
 		Logger:           logger,
 	})
@@ -91,7 +92,7 @@ func main() {
 	}
 
 	go func() {
-		logger.Info("api listening", "address", server.Addr, "devAuth", settings.AllowDevAuth, "localAuth", settings.LocalAuthEnabled, "supabaseAuth", remoteTokenVerifier != nil, "kakaoCatalog", settings.KakaoRESTAPIKey != "")
+		logger.Info("api listening", "address", server.Addr, "devAuth", settings.AllowDevAuth, "localAuth", settings.LocalAuthEnabled, "adminOpenAccess", settings.AdminOpenAccess, "supabaseAuth", remoteTokenVerifier != nil, "kakaoCatalog", settings.KakaoRESTAPIKey != "")
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error("serve api", "error", err)
 			stop()

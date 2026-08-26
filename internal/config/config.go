@@ -22,6 +22,7 @@ type Config struct {
 	SupabaseJWKSURL        string
 	SupabaseServiceRoleKey string
 	AdminAPIKey            string
+	AdminOpenAccess        bool
 	PublicAppURL           string
 	KakaoRESTAPIKey        string
 	ExpoPushURL            string
@@ -35,6 +36,10 @@ func Load() (Config, error) {
 	localAuthEnabled, err := strconv.ParseBool(envOr("LOCAL_AUTH_ENABLED", "true"))
 	if err != nil {
 		return Config{}, fmt.Errorf("parse LOCAL_AUTH_ENABLED: %w", err)
+	}
+	adminOpenAccess, err := strconv.ParseBool(envOr("ADMIN_OPEN_ACCESS", "false"))
+	if err != nil {
+		return Config{}, fmt.Errorf("parse ADMIN_OPEN_ACCESS: %w", err)
 	}
 
 	origins := strings.Split(envOr("ALLOWED_ORIGINS", "http://localhost:8081,http://127.0.0.1:8081,http://localhost:19006,http://127.0.0.1:19006"), ",")
@@ -79,6 +84,7 @@ func Load() (Config, error) {
 		SupabaseJWKSURL:        supabaseJWKSURL,
 		SupabaseServiceRoleKey: serviceRoleKey,
 		AdminAPIKey:            adminAPIKey,
+		AdminOpenAccess:        adminOpenAccess,
 		PublicAppURL:           publicAppURL,
 		KakaoRESTAPIKey:        strings.TrimSpace(os.Getenv("KAKAO_REST_API_KEY")),
 		ExpoPushURL:            strings.TrimSpace(os.Getenv("EXPO_PUSH_URL")),
