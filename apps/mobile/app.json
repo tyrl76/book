@@ -20,7 +20,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.bookgyeol.app"
+      "package": "com.bookgyeol.app",
+      "versionCode": 3
     },
     "web": {
       "output": "static",
