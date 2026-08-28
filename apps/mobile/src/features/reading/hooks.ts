@@ -2,9 +2,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Crypto from 'expo-crypto';
 
 import { useAuth } from '@/features/auth/auth-provider';
-import { fetchProgressEntries, fetchReadingRuns, updateReadingRun } from '@/lib/api';
+import { deleteReadingRun, fetchProgressEntries, fetchReadingRuns, updateReadingRun } from '@/lib/api';
 import type { ReadingRun } from '@/types/domain';
 import {
+  discardReadingRunLocalData,
   enqueueProgress,
   failedOperationCount,
   loadReadingRuns,
@@ -97,6 +98,32 @@ export function useUpdateReadingRun() {
         queryClient.invalidateQueries({ queryKey: ['reading-runs'] }),
         queryClient.invalidateQueries({ queryKey: ['reading-stats'] }),
         queryClient.invalidateQueries({ queryKey: ['feed'] }),
+      ]);
+    },
+  });
+}
+
+export function useDeleteReadingRun() {
+  const db = useAppDatabase();
+  const { userID } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (readingRunID: string) => {
+      if (!userID) throw new Error('로그인이 필요합니다');
+      await deleteReadingRun(readingRunID);
+      await discardReadingRunLocalData(db, userID, readingRunID).catch((error) => {
+        console.warn('discard deleted reading run cache', error);
+      });
+      return readingRunID;
+    },
+    onSuccess: async (readingRunID) => {
+      queryClient.removeQueries({ queryKey: ['progress-entries', readingRunID] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['reading-runs'] }),
+        queryClient.invalidateQueries({ queryKey: ['reading-stats'] }),
+        queryClient.invalidateQueries({ queryKey: ['feed'] }),
+        queryClient.invalidateQueries({ queryKey: ['pending-count'] }),
+        queryClient.invalidateQueries({ queryKey: ['failed-count'] }),
       ]);
     },
   });

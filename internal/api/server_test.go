@@ -86,7 +86,9 @@ func (f *fakeModerationStore) ListModerationActions(context.Context, int) ([]Mod
 type fakeAccountStore struct {
 	fakeStore
 	requested, deleted, completed bool
+	deletedReadingRunID           string
 	deleteErr                     error
+	deleteReadingRunErr           error
 }
 
 func (f *fakeAccountStore) GetProfile(context.Context, string) (Profile, error) {
@@ -97,6 +99,10 @@ func (f *fakeAccountStore) UpdateProfile(context.Context, string, UpdateProfileC
 }
 func (f *fakeAccountStore) UpdateReadingRun(context.Context, string, string, UpdateReadingRunCommand) (ReadingRun, error) {
 	return ReadingRun{}, nil
+}
+func (f *fakeAccountStore) DeleteReadingRun(_ context.Context, _ string, runID string) error {
+	f.deletedReadingRunID = runID
+	return f.deleteReadingRunErr
 }
 func (f *fakeAccountStore) ListProgressEntries(context.Context, string, string) ([]ProgressEntry, error) {
 	return nil, nil
@@ -230,6 +236,29 @@ func TestCreateReadingRunUsesCatalogBook(t *testing.T) {
 	}
 	if store.created.Book.Title != "소년이 온다" || store.created.TotalValue != 216 {
 		t.Fatalf("unexpected create command: %#v", store.created)
+	}
+}
+
+func TestDeleteReadingRunChecksOwnershipAndReturnsNoContent(t *testing.T) {
+	store := &fakeAccountStore{}
+	handler := NewServer(store, Options{AllowDevAuth: true, DevUserID: "11111111-1111-4111-8111-111111111111"})
+	const runID = "a1111111-1111-4111-8111-111111111111"
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodDelete, "/v1/reading-runs/"+runID, nil))
+
+	if response.Code != http.StatusNoContent || store.deletedReadingRunID != runID {
+		t.Fatalf("status = %d, deleted run = %q, body = %s", response.Code, store.deletedReadingRunID, response.Body.String())
+	}
+}
+
+func TestDeleteReadingRunReturnsNotFound(t *testing.T) {
+	store := &fakeAccountStore{deleteReadingRunErr: ErrNotFound}
+	handler := NewServer(store, Options{AllowDevAuth: true, DevUserID: "11111111-1111-4111-8111-111111111111"})
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodDelete, "/v1/reading-runs/a1111111-1111-4111-8111-111111111111", nil))
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404, body = %s", response.Code, response.Body.String())
 	}
 }
 

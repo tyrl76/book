@@ -83,6 +83,7 @@ type AccountStore interface {
 	GetProfile(context.Context, string) (Profile, error)
 	UpdateProfile(context.Context, string, UpdateProfileCommand) (Profile, error)
 	UpdateReadingRun(context.Context, string, string, UpdateReadingRunCommand) (ReadingRun, error)
+	DeleteReadingRun(context.Context, string, string) error
 	ListProgressEntries(context.Context, string, string) ([]ProgressEntry, error)
 	GetReadingStats(context.Context, string, int) (ReadingStats, error)
 	GetNotificationPreferences(context.Context, string) (NotificationPreferences, error)
@@ -211,6 +212,27 @@ func (s *Server) updateReadingRun(response http.ResponseWriter, request *http.Re
 		return
 	}
 	writeJSON(response, http.StatusOK, item)
+}
+
+func (s *Server) deleteReadingRun(response http.ResponseWriter, request *http.Request, userID string) {
+	store, ok := s.accountStore(response)
+	if !ok {
+		return
+	}
+	runID := request.PathValue("readingRunID")
+	if !uuidPattern.MatchString(runID) {
+		writeError(response, http.StatusBadRequest, "invalid_reading_run_id", "독서 회차를 확인해 주세요")
+		return
+	}
+	if err := store.DeleteReadingRun(request.Context(), userID, runID); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			writeError(response, http.StatusNotFound, "reading_run_not_found", "독서 회차를 찾을 수 없습니다")
+			return
+		}
+		s.internalError(response, err)
+		return
+	}
+	response.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) listProgressEntries(response http.ResponseWriter, request *http.Request, userID string) {

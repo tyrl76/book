@@ -1,4 +1,4 @@
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BookCover } from '@/components/product/book-cover';
@@ -6,7 +6,7 @@ import { ProgressBar } from '@/components/product/progress-bar';
 import { Screen } from '@/components/product/screen';
 import { Radius, Spacing } from '@/constants/theme';
 import { useGroups } from '@/features/groups/hooks';
-import { useProgressEntries, useReadingRuns, useUpdateReadingRun } from '@/features/reading/hooks';
+import { useDeleteReadingRun, useProgressEntries, useReadingRuns, useUpdateReadingRun } from '@/features/reading/hooks';
 import { useTheme } from '@/hooks/use-theme';
 import type { ReadingRun } from '@/types/domain';
 
@@ -44,12 +44,36 @@ export default function BookDetailScreen() {
   const entries = useProgressEntries(runID ?? '');
   const groups = useGroups();
   const update = useUpdateReadingRun();
+  const remove = useDeleteReadingRun();
 
   const change = (input: Partial<Pick<ReadingRun, 'status' | 'visibility' | 'shareGroupId' | 'progressPrecision' | 'autoShare'>>) => {
     if (!runID) return;
     update.mutate({ readingRunID: runID, input }, {
       onError: (error) => Alert.alert('책 설정을 바꾸지 못했어요', error.message),
     });
+  };
+
+  const confirmRemove = () => {
+    if (!runID || !run) return;
+    Alert.alert(
+      '책장에서 제거할까요?',
+      `「${run.title}」의 진척 기록과 공유된 독서 소식이 함께 삭제됩니다. 이 작업은 되돌릴 수 없어요.`,
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '제거',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await remove.mutateAsync(runID);
+              router.dismissTo('/library');
+            } catch (error) {
+              Alert.alert('책을 제거하지 못했어요', error instanceof Error ? error.message : '잠시 후 다시 시도해 주세요.');
+            }
+          },
+        },
+      ],
+    );
   };
 
   if (!run) {
@@ -133,6 +157,22 @@ export default function BookDetailScreen() {
         ))}
         {!entries.data?.length && !entries.isFetching ? <Text style={[styles.emptyCopy, { color: theme.textSecondary }]}>아직 남긴 기록이 없어요.</Text> : null}
       </View>
+
+      <View style={[styles.dangerZone, { borderColor: theme.border }]}>
+        <View style={styles.switchCopy}>
+          <Text style={[styles.dangerTitle, { color: theme.accent }]}>책장에서 제거</Text>
+          <Text style={[styles.sectionCopy, { color: theme.textSecondary }]}>잘못 추가한 책이나 더 이상 보관하지 않을 회차를 기록과 함께 지워요.</Text>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${run.title} 책장에서 제거`}
+          accessibilityState={{ disabled: remove.isPending }}
+          disabled={remove.isPending}
+          onPress={confirmRemove}
+          style={({ pressed }) => [styles.removeButton, { borderColor: theme.accent, opacity: pressed || remove.isPending ? 0.55 : 1 }]}>
+          <Text style={[styles.removeButtonText, { color: theme.accent }]}>{remove.isPending ? '제거 중…' : '제거'}</Text>
+        </Pressable>
+      </View>
     </Screen>
   );
 }
@@ -198,4 +238,8 @@ const styles = StyleSheet.create({
   entryMeta: { fontSize: 10, fontWeight: '700' },
   emptyTitle: { fontSize: 18, fontWeight: '900' },
   emptyCopy: { fontSize: 13, textAlign: 'center' },
+  dangerZone: { minHeight: 92, borderTopWidth: 1, paddingTop: Spacing.four, flexDirection: 'row', alignItems: 'center', gap: 14 },
+  dangerTitle: { fontSize: 15, fontWeight: '900' },
+  removeButton: { minWidth: 76, minHeight: 44, borderWidth: 1, borderRadius: Radius.medium, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },
+  removeButtonText: { fontSize: 13, fontWeight: '900' },
 });

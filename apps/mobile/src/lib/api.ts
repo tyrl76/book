@@ -232,13 +232,26 @@ async function request(path: string, init?: RequestInit, authenticated = true): 
     headers.Authorization = `Bearer ${session.token}`;
   }
 
-  const response = await fetch(`${baseURL}${path}`, {
-    ...init,
-    headers: {
-      ...headers,
-      ...init?.headers,
-    },
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12_000);
+  let response: Response;
+  try {
+    response = await fetch(`${baseURL}${path}`, {
+      ...init,
+      headers: {
+        ...headers,
+        ...init?.headers,
+      },
+      signal: init?.signal ?? controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new ApiError(408, '서버 응답이 늦어 요청을 중단했어요. 다시 시도해 주세요.');
+    }
+    throw new ApiError(0, '서버에 연결하지 못했어요. 네트워크 상태를 확인해 주세요.');
+  } finally {
+    clearTimeout(timeout);
+  }
 
   const body = await response.json().catch(() => null);
   if (!response.ok) {
@@ -415,6 +428,10 @@ export async function updateReadingRun(
     method: 'PATCH',
     body: JSON.stringify(input),
   }));
+}
+
+export async function deleteReadingRun(readingRunID: string): Promise<void> {
+  await request(`/v1/reading-runs/${encodeURIComponent(readingRunID)}`, { method: 'DELETE' });
 }
 
 export async function fetchProgressEntries(readingRunID: string): Promise<ProgressEntry[]> {

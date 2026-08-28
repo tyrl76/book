@@ -156,6 +156,21 @@ export async function loadReadingRuns(db: SQLiteDatabase, ownerID: string): Prom
   return rows.map((row) => JSON.parse(row.payload) as ReadingRun);
 }
 
+export async function discardReadingRunLocalData(db: SQLiteDatabase, ownerID: string, readingRunID: string) {
+  await withWriteTransaction(db, async (transaction) => {
+    await transaction.runAsync(
+      'DELETE FROM pending_operations WHERE owner_id = ? AND reading_run_id = ?',
+      ownerID,
+      readingRunID,
+    );
+    await transaction.runAsync(
+      'DELETE FROM reading_runs_cache WHERE owner_id = ? AND id = ?',
+      ownerID,
+      readingRunID,
+    );
+  });
+}
+
 export async function saveFeed(db: SQLiteDatabase, ownerID: string, items: FeedEvent[]) {
   await withWriteTransaction(db, async (transaction) => {
     await transaction.runAsync('DELETE FROM feed_cache WHERE owner_id = ?', ownerID);

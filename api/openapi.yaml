@@ -573,6 +573,15 @@ paths:
               schema: { $ref: '#/components/schemas/ReadingRun' }
         '400': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+    delete:
+      tags: [Reading]
+      summary: 내 책장에서 독서 회차와 연결 기록 제거
+      parameters:
+        - $ref: '#/components/parameters/ReadingRunID'
+      responses:
+        '204': { $ref: '#/components/responses/NoContent' }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
 
   /v1/reading-runs/{readingRunId}/entries:
     get:

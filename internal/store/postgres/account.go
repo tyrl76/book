@@ -101,6 +101,42 @@ func (s *Store) UpdateReadingRun(ctx context.Context, userID, runID string, comm
 	return item, nil
 }
 
+func (s *Store) DeleteReadingRun(ctx context.Context, userID, runID string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin delete reading run: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var owned bool
+	if err := tx.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM reading_runs WHERE id = $1::uuid AND user_id = $2::uuid
+		)`, runID, userID).Scan(&owned); err != nil {
+		return fmt.Errorf("check reading run owner before delete: %w", err)
+	}
+	if !owned {
+		return api.ErrNotFound
+	}
+
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM outbox_events
+		WHERE aggregate_type = 'feed_event'
+		  AND aggregate_id IN (
+			SELECT id FROM feed_events WHERE reading_run_id = $1::uuid
+		  )`, runID); err != nil {
+		return fmt.Errorf("delete reading run outbox events: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM reading_runs WHERE id = $1::uuid AND user_id = $2::uuid`, runID, userID); err != nil {
+		return fmt.Errorf("delete reading run: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit delete reading run: %w", err)
+	}
+	return nil
+}
+
 func (s *Store) ListProgressEntries(ctx context.Context, userID, runID string) ([]api.ProgressEntry, error) {
 	var owned bool
 	if err := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM reading_runs WHERE id = $1::uuid AND user_id = $2::uuid)`, runID, userID).Scan(&owned); err != nil {

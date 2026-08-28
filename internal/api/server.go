@@ -206,6 +206,7 @@ func NewServer(store Store, options Options) http.Handler {
 	mux.HandleFunc("GET /v1/me/export", server.auth(server.exportMe))
 	mux.HandleFunc("DELETE /v1/me", server.authWithoutAccessCheck(server.deleteMe))
 	mux.HandleFunc("PATCH /v1/reading-runs/{readingRunID}", server.auth(server.updateReadingRun))
+	mux.HandleFunc("DELETE /v1/reading-runs/{readingRunID}", server.auth(server.deleteReadingRun))
 	mux.HandleFunc("GET /v1/reading-runs/{readingRunID}/entries", server.auth(server.listProgressEntries))
 	mux.HandleFunc("GET /v1/groups", server.auth(server.listGroups))
 	mux.HandleFunc("POST /v1/groups", server.auth(server.createGroup))

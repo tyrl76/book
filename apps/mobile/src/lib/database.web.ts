@@ -42,6 +42,25 @@ export async function loadReadingRuns(_db: AppDatabase, ownerID: string): Promis
   return readJSON(storageKey('reading-runs', ownerID), []);
 }
 
+export async function discardReadingRunLocalData(
+  _db: AppDatabase,
+  ownerID: string,
+  readingRunID: string,
+) {
+  const runsKey = storageKey('reading-runs', ownerID);
+  writeJSON(
+    runsKey,
+    readJSON<ReadingRun[]>(runsKey, []).filter((run) => run.id !== readingRunID),
+  );
+  const pendingKey = storageKey('pending', ownerID);
+  writeJSON(
+    pendingKey,
+    readJSON<StoredPendingOperation[]>(pendingKey, []).filter(
+      (operation) => operation.readingRunId !== readingRunID,
+    ),
+  );
+}
+
 export async function saveFeed(_db: AppDatabase, ownerID: string, items: FeedEvent[]) {
   writeJSON(storageKey('feed', ownerID), items);
 }

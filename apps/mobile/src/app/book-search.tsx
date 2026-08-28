@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useDeferredValue, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { BookAddCard } from '@/components/product/book-add-card';
@@ -12,9 +12,15 @@ import type { ReadingRun } from '@/types/domain';
 export default function BookSearchScreen() {
   const theme = useTheme();
   const [query, setQuery] = useState('');
-  const deferredQuery = useDeferredValue(query);
-  const search = useBookSearch(deferredQuery);
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query.trim()), 350);
+    return () => clearTimeout(timer);
+  }, [query]);
+  const search = useBookSearch(debouncedQuery);
   const create = useCreateReadingRun();
+  const waitingForSearch = query.trim().length >= 2 && query.trim() !== debouncedQuery;
+  const openManualRegistration = () => router.push({ pathname: '/manual-book', params: { title: query.trim() } });
 
   const add = async (
     isbn: string,
@@ -75,12 +81,15 @@ export default function BookSearchScreen() {
             </Pressable>
           </View>
         </View>
-      ) : search.isLoading ? (
+      ) : waitingForSearch || search.isLoading ? (
         <ActivityIndicator color={theme.primary} style={styles.loader} />
       ) : search.isError ? (
         <View style={styles.state}>
           <Text style={[styles.stateTitle, { color: theme.text }]}>검색하지 못했어요</Text>
           <Text style={[styles.stateCopy, { color: theme.textSecondary }]}>{search.error.message}</Text>
+          <Pressable accessibilityRole="button" onPress={() => search.refetch()} style={[styles.manualButton, { backgroundColor: theme.primary }]}>
+            <Text style={[styles.manualButtonText, { color: theme.inverse }]}>다시 검색</Text>
+          </Pressable>
         </View>
       ) : search.data?.length ? (
         <View style={styles.results}>
@@ -98,7 +107,7 @@ export default function BookSearchScreen() {
         <View style={styles.state}>
           <Text style={[styles.stateTitle, { color: theme.text }]}>검색 결과가 없어요</Text>
           <Text style={[styles.stateCopy, { color: theme.textSecondary }]}>검색어를 줄이거나 책 정보를 직접 등록해 보세요.</Text>
-          <Pressable accessibilityRole="button" onPress={() => router.push('/manual-book')} style={[styles.manualButton, { backgroundColor: theme.primary }]}>
+          <Pressable accessibilityRole="button" onPress={openManualRegistration} style={[styles.manualButton, { backgroundColor: theme.primary }]}>
             <Text style={[styles.manualButtonText, { color: theme.inverse }]}>책 직접 등록</Text>
           </Pressable>
         </View>

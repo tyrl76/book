@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -17,7 +17,9 @@ const basisOptions: { value: ReadingRun['progressBasis']; label: string; unit: s
 export default function ManualBookScreen() {
   const theme = useTheme();
   const create = useCreateManualReadingRun();
-  const [title, setTitle] = useState('');
+  const params = useLocalSearchParams<{ title?: string }>();
+  const initialTitle = Array.isArray(params.title) ? params.title[0] : params.title;
+  const [title, setTitle] = useState(initialTitle ?? '');
   const [author, setAuthor] = useState('');
   const [basis, setBasis] = useState<ReadingRun['progressBasis']>('pages');
   const [amount, setAmount] = useState('');
