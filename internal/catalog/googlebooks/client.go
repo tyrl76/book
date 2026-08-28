@@ -38,28 +38,36 @@ func NewClientForTest(apiKey, endpoint string, httpClient *http.Client) *Client 
 }
 
 func (c *Client) SearchPageCounts(ctx context.Context, query string, _ int) (map[string]int, error) {
-	return c.search(ctx, strings.TrimSpace(query), 40)
+	query = strings.TrimSpace(query)
+	if normalized := normalizeISBN(query); normalized == query && (len(normalized) == 10 || len(normalized) == 13) {
+		query = "isbn:" + normalized
+	}
+	counts, _, err := c.search(ctx, query, 40)
+	return counts, err
 }
 
 func (c *Client) LookupPageCount(ctx context.Context, isbn string) (int, error) {
 	normalized := normalizeISBN(isbn)
-	counts, err := c.search(ctx, "isbn:"+normalized, 1)
+	counts, firstPageCount, err := c.search(ctx, "isbn:"+normalized, 1)
 	if err != nil {
 		return 0, err
 	}
 	if pageCount := counts[normalized]; pageCount > 0 {
 		return pageCount, nil
 	}
+	if firstPageCount > 0 {
+		return firstPageCount, nil
+	}
 	return 0, catalog.ErrNotFound
 }
 
-func (c *Client) search(ctx context.Context, query string, maxResults int) (map[string]int, error) {
+func (c *Client) search(ctx context.Context, query string, maxResults int) (map[string]int, int, error) {
 	if c.apiKey == "" {
-		return nil, catalog.ErrUnavailable
+		return nil, 0, catalog.ErrUnavailable
 	}
 	endpoint, err := url.Parse(c.endpoint)
 	if err != nil {
-		return nil, fmt.Errorf("parse Google Books endpoint: %w", err)
+		return nil, 0, fmt.Errorf("parse Google Books endpoint: %w", err)
 	}
 	parameters := endpoint.Query()
 	parameters.Set("q", query)
@@ -72,16 +80,16 @@ func (c *Client) search(ctx context.Context, query string, maxResults int) (map[
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("create Google Books request: %w", err)
+		return nil, 0, fmt.Errorf("create Google Books request: %w", err)
 	}
 	request.Header.Set("Accept", "application/json")
 	response, err := c.http.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("%w: request Google Books: %v", catalog.ErrUnavailable, err)
+		return nil, 0, fmt.Errorf("%w: request Google Books: %v", catalog.ErrUnavailable, err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%w: Google Books returned %d", catalog.ErrUnavailable, response.StatusCode)
+		return nil, 0, fmt.Errorf("%w: Google Books returned %d", catalog.ErrUnavailable, response.StatusCode)
 	}
 
 	var payload struct {
@@ -97,12 +105,16 @@ func (c *Client) search(ctx context.Context, query string, maxResults int) (map[
 	}
 	decoder := json.NewDecoder(io.LimitReader(response.Body, 2<<20))
 	if err := decoder.Decode(&payload); err != nil {
-		return nil, fmt.Errorf("decode Google Books: %w", err)
+		return nil, 0, fmt.Errorf("decode Google Books: %w", err)
 	}
 	counts := make(map[string]int, len(payload.Items))
+	firstPageCount := 0
 	for _, item := range payload.Items {
 		if item.VolumeInfo.PageCount < 1 || item.VolumeInfo.PageCount > 100_000 {
 			continue
+		}
+		if firstPageCount == 0 {
+			firstPageCount = item.VolumeInfo.PageCount
 		}
 		for _, identifier := range item.VolumeInfo.IndustryIdentifiers {
 			isbn := isbn13(identifier.Type, identifier.Identifier)
@@ -111,7 +123,7 @@ func (c *Client) search(ctx context.Context, query string, maxResults int) (map[
 			}
 		}
 	}
-	return counts, nil
+	return counts, firstPageCount, nil
 }
 
 func isbn13(identifierType, value string) string {

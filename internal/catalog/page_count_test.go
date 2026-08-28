@@ -70,3 +70,13 @@ func TestPageCountEnrichedProviderKeepsCatalogAvailable(t *testing.T) {
 		t.Fatalf("LookupISBN() = %#v, %v", item, err)
 	}
 }
+
+func TestPageCountEnrichedProviderLooksUpMissingISBN(t *testing.T) {
+	base := &pageCountBase{items: []Book{{ISBN: "9788936434595", Title: "채식주의자"}}}
+	provider := NewPageCountEnrichedProvider(base, &pageCountSource{counts: map[string]int{}, lookup: 240})
+
+	items, err := provider.Search(context.Background(), "채식주의자", 20)
+	if err != nil || len(items) != 1 || items[0].PageCount != 240 {
+		t.Fatalf("Search() = %#v, %v", items, err)
+	}
+}

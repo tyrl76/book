@@ -45,3 +45,19 @@ func TestLookupPageCountAndUnavailable(t *testing.T) {
 		t.Fatalf("empty key error = %v", err)
 	}
 }
+
+func TestLookupPageCountUsesExactQueryResultWithoutISBNIdentifier(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.URL.Query().Get("q") != "isbn:9788936434595" {
+			t.Fatalf("unexpected query: %s", request.URL.RawQuery)
+		}
+		_, _ = response.Write([]byte(`{"items":[{"volumeInfo":{"industryIdentifiers":[{"type":"OTHER","identifier":"OCLC:1083191738"}],"pageCount":240}}]}`))
+	}))
+	defer server.Close()
+
+	client := NewClientForTest("google-key", server.URL, server.Client())
+	pageCount, err := client.LookupPageCount(context.Background(), "9788936434595")
+	if err != nil || pageCount != 240 {
+		t.Fatalf("LookupPageCount() = %d, %v", pageCount, err)
+	}
+}

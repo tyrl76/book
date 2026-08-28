@@ -3,6 +3,13 @@ package catalog
 import (
 	"context"
 	"sync"
+	"time"
+)
+
+const (
+	maxPageCountLookups     = 10
+	pageCountLookupWorkers  = 5
+	pageCountLookupDeadline = 5 * time.Second
 )
 
 type PageCountProvider interface {
@@ -40,6 +47,7 @@ func (p *PageCountEnrichedProvider) Search(ctx context.Context, query string, li
 	for index := range items {
 		p.applyCached(&items[index])
 	}
+	p.enrichMissing(ctx, items)
 	return items, nil
 }
 
@@ -66,6 +74,64 @@ func (p *PageCountEnrichedProvider) applyCached(item *Book) {
 	}
 	if cached, ok := p.cache.Load(item.ISBN); ok {
 		item.PageCount, _ = cached.(int)
+	}
+}
+
+func (p *PageCountEnrichedProvider) enrichMissing(ctx context.Context, items []Book) {
+	isbns := make([]string, 0, maxPageCountLookups)
+	seen := make(map[string]struct{}, maxPageCountLookups)
+	for _, item := range items {
+		if item.PageCount > 0 || item.ISBN == "" {
+			continue
+		}
+		if _, cached := p.cache.Load(item.ISBN); cached {
+			continue
+		}
+		if _, duplicate := seen[item.ISBN]; duplicate {
+			continue
+		}
+		seen[item.ISBN] = struct{}{}
+		isbns = append(isbns, item.ISBN)
+		if len(isbns) == maxPageCountLookups {
+			break
+		}
+	}
+	if len(isbns) == 0 {
+		return
+	}
+
+	lookupContext, cancel := context.WithTimeout(ctx, pageCountLookupDeadline)
+	defer cancel()
+	type result struct {
+		isbn      string
+		pageCount int
+	}
+	results := make(chan result, len(isbns))
+	semaphore := make(chan struct{}, pageCountLookupWorkers)
+	var group sync.WaitGroup
+	for _, isbn := range isbns {
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			select {
+			case semaphore <- struct{}{}:
+				defer func() { <-semaphore }()
+			case <-lookupContext.Done():
+				return
+			}
+			pageCount, err := p.pages.LookupPageCount(lookupContext, isbn)
+			if err == nil && pageCount > 0 {
+				results <- result{isbn: isbn, pageCount: pageCount}
+			}
+		}()
+	}
+	group.Wait()
+	close(results)
+	for item := range results {
+		p.cache.Store(item.isbn, item.pageCount)
+	}
+	for index := range items {
+		p.applyCached(&items[index])
 	}
 }
 
