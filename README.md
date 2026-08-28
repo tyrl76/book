@@ -8,7 +8,7 @@
 
 - Expo 57 + React Native + TypeScript 앱, 시스템·라이트·다크 테마
 - 첫 계정만 허용하는 개인 로그인, bcrypt 비밀번호 해시, 30일 불투명 세션과 Android 보안 저장소
-- Kakao 도서 검색·ISBN 카메라 스캔·직접 등록과 로컬 폴백
+- Kakao 도서 검색·Google Books 전체 페이지 수 보강·ISBN 카메라 스캔·직접 등록과 로컬 폴백
 - 종이책·전자책·오디오북, 다권 책장, 5개 독서 상태와 재독 회차
 - 진척·메모·타이머·과거 기록, 네이티브 SQLite 오프라인 큐와 멱등 재전송
 - 친구 초대·수락·삭제·차단, 비공개 그룹·초대·그룹 한정 공유
@@ -18,7 +18,7 @@
 - PostgreSQL 저장 상태·건수 확인, 내 데이터 JSON 내보내기와 개인 계정 완전 삭제
 - 운영자 신고 콘솔, 콘텐츠 숨김·제재·복원과 감사 로그
 
-기능별 실제 완료 범위와 남은 작업은 [구현 현황](docs/IMPLEMENTATION_STATUS.md)을 기준으로 한다. Kakao 도서 검색에는 전체 페이지 수가 없을 수 있어 사용자가 쪽수·퍼센트·오디오 시간을 선택한다. 웹은 개발·QA용이며 첫 출시는 iOS/Android를 우선한다.
+기능별 사용자 동작·API·상태·인수 조건은 [기능 명세표](docs/FEATURE_SPECIFICATION.md), 실제 완료 범위와 남은 작업은 [구현 현황](docs/IMPLEMENTATION_STATUS.md)을 기준으로 한다. Kakao 결과의 ISBN에 Google Books 전체 페이지 수를 보강하고 값이 없거나 판본과 다르면 사용자가 쪽수·퍼센트·오디오 시간을 선택한다. 웹은 개발·QA용이며 첫 출시는 iOS/Android를 우선한다.
 
 ## 로컬 실행
 
@@ -106,6 +106,7 @@ DATABASE_URL=postgres://... go run ./cmd/migrate
 
 ## 문서
 
+- [기능 명세표](docs/FEATURE_SPECIFICATION.md): 전체 기능 ID, 사용자 흐름, 화면·API, 상태, 인수 조건, 외부 의존성
 - [최종 제품 기획서](docs/PRODUCT_PLAN_V2.md): 시장 비교, 사용자, 정책, 화면, 지표, 출시 계획
 - [구현 현황](docs/IMPLEMENTATION_STATUS.md): 실행 가능한 기능, 외부 연결 기능, 후속 로드맵
 - [외부·인프라 체크리스트](docs/EXTERNAL_SETUP.md): 소유자가 직접 해야 하는 베타·출시 준비
