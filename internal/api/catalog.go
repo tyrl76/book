@@ -17,6 +17,14 @@ import (
 var isbnPattern = regexp.MustCompile(`^(?:\d{10}|\d{13})$`)
 
 func (s *Server) searchBooks(response http.ResponseWriter, request *http.Request, _ string) {
+	s.searchCatalogBooks(response, request)
+}
+
+func (s *Server) searchAdminBooks(response http.ResponseWriter, request *http.Request, _ string) {
+	s.searchCatalogBooks(response, request)
+}
+
+func (s *Server) searchCatalogBooks(response http.ResponseWriter, request *http.Request) {
 	query := strings.TrimSpace(request.URL.Query().Get("query"))
 	if len([]rune(query)) < 2 || len([]rune(query)) > 100 {
 		writeError(response, http.StatusBadRequest, "invalid_query", "검색어는 2자 이상 100자 이하여야 합니다")
@@ -39,6 +47,9 @@ func (s *Server) searchBooks(response http.ResponseWriter, request *http.Request
 	if err != nil {
 		s.catalogError(response, err)
 		return
+	}
+	if items == nil {
+		items = []catalog.Book{}
 	}
 	writeJSON(response, http.StatusOK, map[string]any{"items": items})
 }

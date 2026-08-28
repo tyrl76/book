@@ -116,7 +116,7 @@ func TestAdminConsoleIncludesOperationsViews(t *testing.T) {
 	handler := NewServer(&fakeStore{}, Options{})
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/admin", nil))
-	for _, expected := range []string{"운영 현황", "실시간 API 로그", "신고 및 감사 기록", "최초 개인 계정 만들기", "/v1/auth/register"} {
+	for _, expected := range []string{"운영 현황", "실시간 API 로그", "신고 및 감사 기록", "최초 개인 계정 만들기", "/v1/auth/register", "/admin/books"} {
 		if !strings.Contains(response.Body.String(), expected) {
 			t.Fatalf("admin console missing %q", expected)
 		}
@@ -126,6 +126,33 @@ func TestAdminConsoleIncludesOperationsViews(t *testing.T) {
 	}
 	if !strings.Contains(response.Header().Get("Content-Security-Policy"), "frame-ancestors 'none'") {
 		t.Fatal("admin console missing restrictive content security policy")
+	}
+}
+
+func TestAdminBookSearchPageAndAPI(t *testing.T) {
+	handler := NewServer(&fakeStore{}, Options{AdminAPIKey: "test-admin-key", Catalog: &fakeStore{}})
+
+	page := httptest.NewRecorder()
+	handler.ServeHTTP(page, httptest.NewRequest(http.MethodGet, "/admin/books", nil))
+	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), "도서 검색") || !strings.Contains(page.Body.String(), "/v1/admin/catalog/books") {
+		t.Fatalf("book search page status = %d", page.Code)
+	}
+	if !strings.Contains(page.Header().Get("Content-Security-Policy"), "frame-ancestors 'none'") {
+		t.Fatal("book search page missing restrictive content security policy")
+	}
+
+	unauthorized := httptest.NewRecorder()
+	handler.ServeHTTP(unauthorized, httptest.NewRequest(http.MethodGet, "/v1/admin/catalog/books?query=한강", nil))
+	if unauthorized.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthorized catalog status = %d", unauthorized.Code)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/v1/admin/catalog/books?query=한강", nil)
+	request.Header.Set("X-Admin-Key", "test-admin-key")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"items":[]`) {
+		t.Fatalf("catalog status = %d, body = %s", response.Code, response.Body.String())
 	}
 }
 
