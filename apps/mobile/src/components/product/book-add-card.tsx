@@ -51,7 +51,7 @@ export function BookAddCard({ book, pending = false, compact = false, onAdd }: P
           <Text numberOfLines={2} style={[styles.title, { color: theme.text }]}>{book.title}</Text>
           <Text numberOfLines={1} style={[styles.meta, { color: theme.textSecondary }]}>{book.author || '저자 미상'}</Text>
           <Text numberOfLines={1} style={[styles.meta, { color: theme.textSecondary }]}>
-            {[book.publisher, book.publishedAt].filter(Boolean).join(' · ') || `ISBN ${book.isbn}`}
+            {[book.publisher, book.publishedAt?.slice(0, 10), book.pageCount ? `${book.pageCount}쪽` : ''].filter(Boolean).join(' · ') || `ISBN ${book.isbn}`}
           </Text>
         </View>
       </View>

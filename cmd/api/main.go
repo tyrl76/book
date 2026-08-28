@@ -13,6 +13,7 @@ import (
 	"github.com/datau/book/internal/api"
 	bookauth "github.com/datau/book/internal/auth"
 	"github.com/datau/book/internal/catalog"
+	"github.com/datau/book/internal/catalog/googlebooks"
 	"github.com/datau/book/internal/catalog/kakao"
 	"github.com/datau/book/internal/config"
 	"github.com/datau/book/internal/store/postgres"
@@ -54,7 +55,11 @@ func main() {
 
 	var catalogProvider catalog.Provider = store
 	if settings.KakaoRESTAPIKey != "" {
-		catalogProvider = catalog.NewLayeredProvider(kakao.NewClient(settings.KakaoRESTAPIKey), store)
+		var remoteCatalog catalog.Provider = kakao.NewClient(settings.KakaoRESTAPIKey)
+		if settings.GoogleBooksAPIKey != "" {
+			remoteCatalog = catalog.NewPageCountEnrichedProvider(remoteCatalog, googlebooks.NewClient(settings.GoogleBooksAPIKey))
+		}
+		catalogProvider = catalog.NewLayeredProvider(remoteCatalog, store)
 	}
 
 	verifiers := make([]bookauth.SubjectVerifier, 0, 2)
@@ -92,7 +97,7 @@ func main() {
 	}
 
 	go func() {
-		logger.Info("api listening", "address", server.Addr, "devAuth", settings.AllowDevAuth, "localAuth", settings.LocalAuthEnabled, "adminOpenAccess", settings.AdminOpenAccess, "supabaseAuth", remoteTokenVerifier != nil, "kakaoCatalog", settings.KakaoRESTAPIKey != "")
+		logger.Info("api listening", "address", server.Addr, "devAuth", settings.AllowDevAuth, "localAuth", settings.LocalAuthEnabled, "adminOpenAccess", settings.AdminOpenAccess, "supabaseAuth", remoteTokenVerifier != nil, "kakaoCatalog", settings.KakaoRESTAPIKey != "", "googleBooksPageCount", settings.GoogleBooksAPIKey != "")
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error("serve api", "error", err)
 			stop()

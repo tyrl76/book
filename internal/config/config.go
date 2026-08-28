@@ -25,6 +25,7 @@ type Config struct {
 	AdminOpenAccess        bool
 	PublicAppURL           string
 	KakaoRESTAPIKey        string
+	GoogleBooksAPIKey      string
 	ExpoPushURL            string
 }
 
@@ -87,6 +88,7 @@ func Load() (Config, error) {
 		AdminOpenAccess:        adminOpenAccess,
 		PublicAppURL:           publicAppURL,
 		KakaoRESTAPIKey:        strings.TrimSpace(os.Getenv("KAKAO_REST_API_KEY")),
+		GoogleBooksAPIKey:      strings.TrimSpace(os.Getenv("GOOGLE_BOOKS_API_KEY")),
 		ExpoPushURL:            strings.TrimSpace(os.Getenv("EXPO_PUSH_URL")),
 	}, nil
 }

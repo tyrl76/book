@@ -57,6 +57,7 @@ EXPO_PUBLIC_API_URL=http://192.168.0.10:8080
 ALLOW_DEV_AUTH=false
 LOCAL_AUTH_ENABLED=true
 KAKAO_REST_API_KEY=서버용_REST_API_키
+GOOGLE_BOOKS_API_KEY=서버용_GOOGLE_BOOKS_API_키
 EXPO_PUSH_URL=https://exp.host/--/api/v2/push/send
 ADMIN_API_KEY=32자_이상의_운영자_비밀
 PUBLIC_APP_URL=https://links.example.com

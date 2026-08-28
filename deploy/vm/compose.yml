@@ -55,6 +55,7 @@ services:
       PUBLIC_APP_URL: https://${APP_DOMAIN:?APP_DOMAIN is required}
       ALLOWED_ORIGINS: https://${APP_DOMAIN}
       KAKAO_REST_API_KEY: ${KAKAO_REST_API_KEY:-}
+      GOOGLE_BOOKS_API_KEY: ${GOOGLE_BOOKS_API_KEY:-}
       EXPO_PUSH_URL: ${EXPO_PUSH_URL:-}
     depends_on:
       db:

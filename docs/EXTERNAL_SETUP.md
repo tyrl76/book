@@ -60,6 +60,7 @@ EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 
 - [ ] Kakao Developers 앱을 만들고 도서 검색 사용 조건·쿼터를 확인한다.
 - [ ] REST API 키를 서버 비밀 저장소에 `KAKAO_REST_API_KEY`로 넣는다.
+- [ ] Google Books API를 활성화하고 API 키를 `GOOGLE_BOOKS_API_KEY`로 넣는다. 키는 Books API와 서버 IP로 제한한다.
 - [ ] ISBN·표지·설명 저장 및 표시가 약관에 맞는지 법무/운영 확인을 받는다.
 - [ ] 검색 장애 시 로컬 카탈로그 폴백과 수동 등록이 동작하는지 스테이징에서 시험한다.
 
@@ -81,6 +82,7 @@ DATABASE_URL=postgres://...
 PORT=8080
 ALLOWED_ORIGINS=https://app.example.com
 KAKAO_REST_API_KEY=...
+GOOGLE_BOOKS_API_KEY=...
 PUBLIC_APP_URL=https://links.example.com
 ADMIN_API_KEY=32자_이상의_무작위_값
 ```

@@ -47,6 +47,21 @@ func TestLoadEnablesAdminOpenAccessExplicitly(t *testing.T) {
 	}
 }
 
+func TestLoadReadsCatalogKeys(t *testing.T) {
+	t.Setenv("ALLOW_DEV_AUTH", "false")
+	t.Setenv("LOCAL_AUTH_ENABLED", "true")
+	t.Setenv("KAKAO_REST_API_KEY", " kakao-key ")
+	t.Setenv("GOOGLE_BOOKS_API_KEY", " google-key ")
+
+	settings, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if settings.KakaoRESTAPIKey != "kakao-key" || settings.GoogleBooksAPIKey != "google-key" {
+		t.Fatalf("unexpected catalog keys: %#v", settings)
+	}
+}
+
 func TestLoadDerivesSupabaseIssuerAndJWKS(t *testing.T) {
 	t.Setenv("ALLOW_DEV_AUTH", "false")
 	t.Setenv("SUPABASE_URL", "https://project.supabase.co/")
