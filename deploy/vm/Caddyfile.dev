@@ -6,7 +6,28 @@
 {$APP_DOMAIN} {
 	encode zstd gzip
 
-	reverse_proxy api:8080
+	@downloadRoot path /download
+	redir @downloadRoot /download/ 308
+
+	@latestApk path /download/bookgyeol-latest.apk
+	handle @latestApk {
+		header Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+		header Content-Disposition `attachment; filename="bookgyeol-latest.apk"`
+		header Content-Type "application/vnd.android.package-archive"
+		root * /srv/downloads
+		rewrite * /bookgyeol-latest.apk
+		file_server
+	}
+
+	handle_path /download/* {
+		header Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+		root * /srv/downloads
+		file_server
+	}
+
+	handle {
+		reverse_proxy api:8080
+	}
 
 	header {
 		-Server

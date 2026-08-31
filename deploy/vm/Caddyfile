@@ -6,12 +6,33 @@
 {$APP_DOMAIN} {
 	encode zstd gzip
 
+	@downloadRoot path /download
+	redir @downloadRoot /download/ 308
+
+	@latestApk path /download/bookgyeol-latest.apk
+	handle @latestApk {
+		header Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+		header Content-Disposition `attachment; filename="bookgyeol-latest.apk"`
+		header Content-Type "application/vnd.android.package-archive"
+		root * /srv/downloads
+		rewrite * /bookgyeol-latest.apk
+		file_server
+	}
+
+	handle_path /download/* {
+		header Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+		root * /srv/downloads
+		file_server
+	}
+
 	@ownerOnly path /admin /admin/* /v1/admin/* /v1/auth/register
 	basic_auth @ownerOnly argon2id {
 		owner {$ADMIN_BASIC_HASH}
 	}
 
-	reverse_proxy api:8080
+	handle {
+		reverse_proxy api:8080
+	}
 
 	header {
 		-Server

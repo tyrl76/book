@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f3efe7" />
+    <title>책결 Android 설치</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f3efe7;
+        color: #2a2926;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+      main { width: min(100%, 440px); background: #fffdf8; border: 1px solid #ded8cc; border-radius: 28px; padding: 32px 26px; box-shadow: 0 20px 55px rgba(70, 58, 38, .12); }
+      .eyebrow { color: #746b5d; font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+      h1 { margin: 10px 0 8px; font-size: 30px; letter-spacing: -.04em; }
+      .lead { margin: 0; color: #665f54; line-height: 1.65; }
+      .meta { display: grid; gap: 10px; margin: 26px 0; padding: 18px; border-radius: 18px; background: #f4f0e8; }
+      .meta div { display: flex; justify-content: space-between; gap: 16px; font-size: 14px; }
+      .meta span:first-child { color: #746b5d; }
+      .meta span:last-child { max-width: 65%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; }
+      .download { display: block; width: 100%; border-radius: 16px; padding: 16px; background: #496b50; color: white; text-decoration: none; text-align: center; font-weight: 750; }
+      .download:active { transform: translateY(1px); }
+      .note { margin: 18px 2px 0; color: #746b5d; font-size: 13px; line-height: 1.6; }
+      @media (prefers-color-scheme: dark) {
+        :root { background: #191a18; color: #f0ede5; }
+        main { background: #222420; border-color: #363a34; box-shadow: none; }
+        .lead, .note, .eyebrow, .meta span:first-child { color: #bcb7ac; }
+        .meta { background: #2b2e29; }
+        .download { background: #6d9676; color: #101511; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="eyebrow">Bookgyeol Private Preview</div>
+      <h1>책결 Android</h1>
+      <p class="lead">항상 최신 개발 버전을 같은 주소에서 내려받을 수 있습니다.</p>
+      <section class="meta" aria-label="현재 배포 정보">
+        <div><span>버전</span><span id="version">확인 중…</span></div>
+        <div><span>업데이트</span><span id="published">확인 중…</span></div>
+        <div><span>파일 크기</span><span id="size">확인 중…</span></div>
+      </section>
+      <a class="download" href="./bookgyeol-latest.apk">최신 APK 다운로드</a>
+      <p class="note">설치할 때 Android가 출처 허용을 요청할 수 있습니다. 기존 앱 데이터는 앱을 삭제하지 않고 업데이트 설치하면 유지됩니다.</p>
+    </main>
+    <script>
+      const text = (id, value) => { document.getElementById(id).textContent = value; };
+      fetch('./version.json', { cache: 'no-store' })
+        .then((response) => response.ok ? response.json() : Promise.reject(new Error('metadata unavailable')))
+        .then((release) => {
+          text('version', `${release.versionName} (${release.versionCode})`);
+          text('published', new Date(release.publishedAt).toLocaleString('ko-KR'));
+          text('size', `${(release.sizeBytes / 1024 / 1024).toFixed(1)} MB`);
+        })
+        .catch(() => {
+          text('version', '최신 개발판');
+          text('published', '정보 없음');
+          text('size', '다운로드 시 확인');
+        });
+    </script>
+  </body>
+</html>
