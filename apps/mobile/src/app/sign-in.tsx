@@ -16,6 +16,7 @@ import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Radius, Spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/auth-provider';
 import { useTheme } from '@/hooks/use-theme';
+import { ApiError } from '@/lib/api';
 
 export default function SignInScreen() {
   const auth = useAuth();
@@ -48,7 +49,9 @@ export default function SignInScreen() {
       if (isRegistration) await auth.register(nickname, email, password);
       else await auth.signIn(email, password);
     } catch (error) {
-      setFormError(error);
+      setFormError(error instanceof ApiError && error.status === 401
+        ? new Error('이메일 또는 비밀번호를 확인해 주세요.')
+        : error);
     } finally {
       setPending(false);
     }
