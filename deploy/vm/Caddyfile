@@ -8,6 +8,12 @@
 
 	@downloadRoot path /download
 	redir @downloadRoot /download/ 308
+	@appRoot path /app
+	redir @appRoot /app/ 308
+	@friendInvite path_regexp friendInvite ^/invite/.+$
+	redir @friendInvite /app{uri} 308
+	@groupInvite path_regexp groupInvite ^/group-invite/.+$
+	redir @groupInvite /app{uri} 308
 
 	@latestApk path /download/bookgyeol-latest.apk
 	handle @latestApk {
@@ -22,6 +28,13 @@
 	handle_path /download/* {
 		header Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
 		root * /srv/downloads
+		file_server
+	}
+
+	handle_path /app/* {
+		header Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+		root * /srv/web-deploy/current
+		try_files {path} {path}.html {path}/index.html /index.html
 		file_server
 	}
 

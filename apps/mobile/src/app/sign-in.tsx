@@ -25,6 +25,9 @@ export default function SignInScreen() {
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
   const [pending, setPending] = useState(false);
+  const sessionStorageCopy = Platform.OS === 'web'
+    ? '로그인 정보는 현재 브라우저에 보관됩니다.'
+    : '로그인 정보는 Android 보안 저장소에 보관됩니다.';
 
   const isRegistration = auth.registrationOpen === true;
   const valid = useMemo(() => {
@@ -87,8 +90,8 @@ export default function SignInScreen() {
             </Text>
             <Text style={[styles.copy, { color: theme.textSecondary }]}>
               {isRegistration
-                ? '첫 계정만 만들 수 있어요. 기록은 내 PC의 PostgreSQL에 저장됩니다.'
-                : '내 PC에 저장된 계정으로 안전하게 로그인하세요.'}
+                ? '첫 계정만 만들 수 있어요. 기록은 내 전용 서버의 PostgreSQL에 저장됩니다.'
+                : '내 전용 서버에 저장된 계정으로 안전하게 로그인하세요.'}
             </Text>
           </View>
         </View>
@@ -121,7 +124,7 @@ export default function SignInScreen() {
 
         <View style={[styles.security, { backgroundColor: theme.primarySoft }]}>
           <Text style={[styles.securityTitle, { color: theme.primary }]}>내 데이터, 내 서버</Text>
-          <Text style={[styles.securityCopy, { color: theme.textSecondary }]}>비밀번호는 암호화된 해시로, 로그인 정보는 Android 보안 저장소에 보관됩니다.</Text>
+          <Text style={[styles.securityCopy, { color: theme.textSecondary }]}>비밀번호는 암호화된 해시로 저장되며, {sessionStorageCopy}</Text>
         </View>
       </SafeAreaView>
     </KeyboardAvoidingView>

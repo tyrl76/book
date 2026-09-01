@@ -88,7 +88,7 @@ pnpm lint
 pnpm exec expo export --platform web
 ```
 
-웹 빌드는 정적 번들 검증용이다. 웹에서는 네이티브 푸시 등록을 비활성화하고, Expo SQLite의 OPFS 다중 탭 충돌을 피하기 위해 브라우저 `localStorage` 캐시 어댑터를 사용한다.
+웹 빌드는 `https://34-64-97-191.sslip.io/app/`에 사용자용 웹앱으로 배포한다. 웹에서는 네이티브 푸시 등록을 비활성화하고, Expo SQLite의 OPFS 다중 탭 충돌을 피하기 위해 브라우저 `localStorage` 캐시 어댑터를 사용한다. `deploy/vm/publish-android.ps1`은 APK 게시 후 웹앱도 기본적으로 함께 갱신하며, 웹만 갱신할 때는 `deploy/vm/publish-web.ps1`을 실행한다.
 
 ## 배포 파이프라인
 

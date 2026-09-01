@@ -6,7 +6,8 @@ param(
     [string]$RemoteDirectory = '/opt/bookgyeol/repo/deploy/vm/downloads',
     [string]$PublicBaseUrl = 'https://34-64-97-191.sslip.io/download',
     [string]$JavaHome = $env:JAVA_HOME,
-    [string]$ExpectedSignerSha256 = 'a2b69d86db7e2f394e153b883fcc71da02d046031f4fb7ee8dfb608d925dd0bf'
+    [string]$ExpectedSignerSha256 = 'a2b69d86db7e2f394e153b883fcc71da02d046031f4fb7ee8dfb608d925dd0bf',
+    [switch]$SkipWeb
 )
 
 $ErrorActionPreference = 'Stop'
@@ -96,6 +97,11 @@ try {
     Write-Host "APK 주소: $PublicBaseUrl/bookgyeol-latest.apk"
     Write-Host "버전: $versionName ($versionCode)"
     Write-Host "SHA-256: $sha256"
+
+    if (-not $SkipWeb) {
+        & (Join-Path $PSScriptRoot 'publish-web.ps1') -SshTarget $SshTarget
+        if ($LASTEXITCODE -ne 0) { throw '웹앱 게시에 실패했습니다.' }
+    }
 }
 finally {
     if (Test-Path -LiteralPath $temporaryMetadata) {
