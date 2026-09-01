@@ -5,19 +5,23 @@ import { ActivityIndicator, Keyboard, Pressable, StyleSheet, Text, TextInput, Vi
 import { BookAddCard } from '@/components/product/book-add-card';
 import { Screen } from '@/components/product/screen';
 import { FeedbackBanner } from '@/components/ui/feedback-banner';
+import { useAuth } from '@/features/auth/auth-provider';
 import { useFeedback } from '@/features/feedback/feedback-provider';
 import { useBookSearch, useBookSuggestions, useCreateReadingRun } from '@/features/catalog/hooks';
 import { useTheme } from '@/hooks/use-theme';
 import { ApiError } from '@/lib/api';
+import { addRecentSearch, clearRecentSearches, loadRecentSearches, removeRecentSearch } from '@/lib/recent-searches';
 import type { Book, ReadingRun } from '@/types/domain';
 
 export default function BookSearchScreen() {
   const theme = useTheme();
+  const { userID } = useAuth();
   const feedback = useFeedback();
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [submittedQuery, setSubmittedQuery] = useState('');
   const [suggestionsVisible, setSuggestionsVisible] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => loadRecentSearches(userID ?? ''));
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query.trim()), 250);
     return () => clearTimeout(timer);
@@ -44,6 +48,7 @@ export default function BookSearchScreen() {
     setDebouncedQuery(normalized);
     setSubmittedQuery(normalized);
     setSuggestionsVisible(false);
+    setRecentSearches(addRecentSearch(userID ?? '', normalized));
     Keyboard.dismiss();
   };
   const openManualRegistration = () => router.push({ pathname: '/manual-book', params: { title: query.trim() } });
@@ -133,6 +138,47 @@ export default function BookSearchScreen() {
         </View>
       ) : null}
 
+      {!query.trim() && recentSearches.length ? (
+        <View style={styles.recentSection}>
+          <View style={styles.recentHeading}>
+            <Text style={[styles.recentTitle, { color: theme.text }]}>최근 검색어</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="최근 검색어 전체 삭제"
+              onPress={() => setRecentSearches(clearRecentSearches(userID ?? ''))}
+              style={({ pressed }) => [styles.clearAllButton, { opacity: pressed ? 0.55 : 1 }]}>
+              <Text style={[styles.clearAllText, { color: theme.textSecondary }]}>전체 삭제</Text>
+            </Pressable>
+          </View>
+          <View style={[styles.recentList, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            {recentSearches.map((value, index) => (
+              <View
+                key={value}
+                style={[
+                  styles.recentRow,
+                  { borderTopColor: theme.border, borderTopWidth: index ? StyleSheet.hairlineWidth : 0 },
+                ]}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${value} 다시 검색`}
+                  onPress={() => submitSearch(value)}
+                  style={({ pressed }) => [styles.recentValueButton, { opacity: pressed ? 0.58 : 1 }]}>
+                  <Text style={[styles.recentIcon, { color: theme.textSecondary }]}>↻</Text>
+                  <Text numberOfLines={1} style={[styles.recentValue, { color: theme.text }]}>{value}</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${value} 최근 검색어에서 삭제`}
+                  onPress={() => setRecentSearches(removeRecentSearch(userID ?? '', value))}
+                  style={({ pressed }) => [styles.recentRemove, { opacity: pressed ? 0.52 : 1 }]}>
+                  <Text style={[styles.recentRemoveText, { color: theme.textSecondary }]}>×</Text>
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        </View>
+      ) : null}
+
       {query.trim().length < 1 ? (
         <View style={styles.state}>
           <Text style={[styles.stateTitle, { color: theme.text }]}>어떤 책을 읽고 있나요?</Text>
@@ -207,6 +253,18 @@ const styles = StyleSheet.create({
   suggestionLoader: { minHeight: 50 },
   suggestionState: { minHeight: 50, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
   suggestionStateText: { fontSize: 12, fontWeight: '700', textAlign: 'center' },
+  recentSection: { gap: 9 },
+  recentHeading: { minHeight: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  recentTitle: { fontSize: 16, fontWeight: '900' },
+  clearAllButton: { minHeight: 40, justifyContent: 'center', paddingHorizontal: 4 },
+  clearAllText: { fontSize: 12, fontWeight: '800' },
+  recentList: { borderWidth: 1, borderRadius: 16, overflow: 'hidden' },
+  recentRow: { minHeight: 50, flexDirection: 'row', alignItems: 'center' },
+  recentValueButton: { minHeight: 50, flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 16 },
+  recentIcon: { fontSize: 17, fontWeight: '800' },
+  recentValue: { flex: 1, fontSize: 14, fontWeight: '800' },
+  recentRemove: { width: 50, minHeight: 50, alignItems: 'center', justifyContent: 'center' },
+  recentRemoveText: { fontSize: 25, lineHeight: 28 },
   state: { alignItems: 'center', paddingVertical: 64, paddingHorizontal: 24, gap: 9 },
   stateTitle: { fontSize: 20, fontWeight: '900', textAlign: 'center' },
   stateCopy: { fontSize: 14, lineHeight: 21, textAlign: 'center' },

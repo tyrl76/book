@@ -1,9 +1,11 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BookCover } from '@/components/product/book-cover';
 import { ProgressBar } from '@/components/product/progress-bar';
 import { Screen } from '@/components/product/screen';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Radius, Spacing } from '@/constants/theme';
 import { useFeedback } from '@/features/feedback/feedback-provider';
@@ -48,6 +50,7 @@ export default function BookDetailScreen() {
   const groups = useGroups();
   const update = useUpdateReadingRun();
   const remove = useDeleteReadingRun();
+  const [removeDialogVisible, setRemoveDialogVisible] = useState(false);
 
   const change = (input: Partial<Pick<ReadingRun, 'status' | 'visibility' | 'shareGroupId' | 'progressPrecision' | 'autoShare'>>) => {
     if (!runID) return;
@@ -59,27 +62,20 @@ export default function BookDetailScreen() {
     });
   };
 
-  const confirmRemove = () => {
+  const removeFromLibrary = async () => {
     if (!runID || !run) return;
-    Alert.alert(
-      '책장에서 제거할까요?',
-      `「${run.title}」의 진척 기록과 공유된 독서 소식이 함께 삭제됩니다. 이 작업은 되돌릴 수 없어요.`,
-      [
-        { text: '취소', style: 'cancel' },
-        {
-          text: '제거',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await remove.mutateAsync(runID);
-              router.dismissTo('/library');
-            } catch (error) {
-              feedback.showError('책을 제거하지 못했어요', error, { label: '다시 확인', onPress: confirmRemove });
-            }
-          },
-        },
-      ],
-    );
+    try {
+      await remove.mutateAsync(runID);
+      setRemoveDialogVisible(false);
+      feedback.showSuccess('책장에서 삭제했어요', `「${run.title}」의 독서 회차와 기록을 삭제했습니다.`);
+      router.dismissTo('/library');
+    } catch (error) {
+      setRemoveDialogVisible(false);
+      feedback.showError('책을 삭제하지 못했어요', error, {
+        label: '다시 시도',
+        onPress: () => setRemoveDialogVisible(true),
+      });
+    }
   };
 
   if (!run) {
@@ -179,19 +175,28 @@ export default function BookDetailScreen() {
 
       <View style={[styles.dangerZone, { borderColor: theme.border }]}>
         <View style={styles.switchCopy}>
-          <Text style={[styles.dangerTitle, { color: theme.accent }]}>책장에서 제거</Text>
+          <Text style={[styles.dangerTitle, { color: theme.accent }]}>책장에서 삭제</Text>
           <Text style={[styles.sectionCopy, { color: theme.textSecondary }]}>잘못 추가한 책이나 더 이상 보관하지 않을 회차를 기록과 함께 지워요.</Text>
         </View>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`${run.title} 책장에서 제거`}
+          accessibilityLabel={`${run.title} 책장에서 삭제`}
           accessibilityState={{ disabled: remove.isPending }}
           disabled={remove.isPending}
-          onPress={confirmRemove}
+          onPress={() => setRemoveDialogVisible(true)}
           style={({ pressed }) => [styles.removeButton, { borderColor: theme.accent, opacity: pressed || remove.isPending ? 0.55 : 1 }]}>
-          <Text style={[styles.removeButtonText, { color: theme.accent }]}>{remove.isPending ? '제거 중…' : '제거'}</Text>
+          <Text style={[styles.removeButtonText, { color: theme.accent }]}>{remove.isPending ? '삭제 중…' : '삭제'}</Text>
         </Pressable>
       </View>
+      <ConfirmDialog
+        visible={removeDialogVisible}
+        title="책장에서 삭제할까요?"
+        message={`「${run.title}」의 진척 기록과 공유된 독서 소식이 함께 삭제됩니다. 이 작업은 되돌릴 수 없어요.`}
+        confirmLabel="삭제"
+        pending={remove.isPending}
+        onCancel={() => setRemoveDialogVisible(false)}
+        onConfirm={() => void removeFromLibrary()}
+      />
     </Screen>
   );
 }

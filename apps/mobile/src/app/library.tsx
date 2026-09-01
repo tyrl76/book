@@ -5,9 +5,11 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, 
 import { BookCover } from '@/components/product/book-cover';
 import { ProgressBar } from '@/components/product/progress-bar';
 import { Screen } from '@/components/product/screen';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Radius, Spacing } from '@/constants/theme';
-import { useReadingRuns } from '@/features/reading/hooks';
+import { useFeedback } from '@/features/feedback/feedback-provider';
+import { useDeleteReadingRun, useReadingRuns } from '@/features/reading/hooks';
 import { useTheme } from '@/hooks/use-theme';
 import type { ReadingRun } from '@/types/domain';
 
@@ -38,12 +40,15 @@ const sortOptions: { value: SortOrder; label: string }[] = [
 
 export default function LibraryScreen() {
   const theme = useTheme();
+  const feedback = useFeedback();
   const params = useLocalSearchParams<{ status?: ReadingRun['status'] }>();
   const initial = Array.isArray(params.status) ? params.status[0] : params.status;
   const [filter, setFilter] = useState<'all' | ReadingRun['status']>(initial ?? 'all');
   const [query, setQuery] = useState('');
   const [sortOrder, setSortOrder] = useState<SortOrder>('recent');
+  const [deleteTarget, setDeleteTarget] = useState<ReadingRun | null>(null);
   const runs = useReadingRuns();
+  const remove = useDeleteReadingRun();
   const items = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase('ko-KR');
     return (runs.data ?? [])
@@ -55,6 +60,22 @@ export default function LibraryScreen() {
         return right.updatedAt.localeCompare(left.updatedAt);
       });
   }, [filter, query, runs.data, sortOrder]);
+
+  const deleteSelectedRun = async () => {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
+    try {
+      await remove.mutateAsync(target.id);
+      setDeleteTarget(null);
+      feedback.showSuccess('책장에서 삭제했어요', `「${target.title}」의 독서 회차와 기록을 삭제했습니다.`);
+    } catch (error) {
+      setDeleteTarget(null);
+      feedback.showError('책을 삭제하지 못했어요', error, {
+        label: '다시 시도',
+        onPress: () => setDeleteTarget(target),
+      });
+    }
+  };
 
   return (
     <Screen>
@@ -147,25 +168,37 @@ export default function LibraryScreen() {
 
       <View style={styles.list}>
         {items.map((run) => (
-          <Pressable
-            key={run.id}
-            accessibilityRole="button"
-            accessibilityLabel={`${run.title} 상세 보기`}
-            onPress={() => router.push({ pathname: '/book/[runID]', params: { runID: run.id } })}
-            style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <BookCover title={run.title} color={run.coverColor} />
-            <View style={styles.bookInfo}>
-              <View style={styles.statusRow}>
-                <Text style={[styles.status, { color: theme.primary }]}>{statusLabel[run.status]}</Text>
-                {run.runNumber > 1 ? <Text style={[styles.reread, { color: theme.textSecondary }]}>{run.runNumber}번째 독서</Text> : null}
+          <View key={run.id} style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${run.title} 상세 보기`}
+              onPress={() => router.push({ pathname: '/book/[runID]', params: { runID: run.id } })}
+              style={({ pressed }) => [styles.cardMain, { opacity: pressed ? 0.68 : 1 }]}>
+              <BookCover title={run.title} color={run.coverColor} />
+              <View style={styles.bookInfo}>
+                <View style={styles.statusRow}>
+                  <Text style={[styles.status, { color: theme.primary }]}>{statusLabel[run.status]}</Text>
+                  {run.runNumber > 1 ? <Text style={[styles.reread, { color: theme.textSecondary }]}>{run.runNumber}번째 독서</Text> : null}
+                </View>
+                <Text numberOfLines={2} style={[styles.bookTitle, { color: theme.text }]}>{run.title}</Text>
+                <Text numberOfLines={1} style={[styles.author, { color: theme.textSecondary }]}>{run.author}</Text>
+                <ProgressBar value={run.normalizedProgress / 100} />
+                <Text style={[styles.progress, { color: theme.textSecondary }]}>{Math.round(run.normalizedProgress / 100)}% · {run.currentValue}/{run.totalValue}</Text>
               </View>
-              <Text numberOfLines={2} style={[styles.bookTitle, { color: theme.text }]}>{run.title}</Text>
-              <Text numberOfLines={1} style={[styles.author, { color: theme.textSecondary }]}>{run.author}</Text>
-              <ProgressBar value={run.normalizedProgress / 100} />
-              <Text style={[styles.progress, { color: theme.textSecondary }]}>{Math.round(run.normalizedProgress / 100)}% · {run.currentValue}/{run.totalValue}</Text>
-            </View>
-            <Text style={[styles.chevron, { color: theme.textSecondary }]}>›</Text>
-          </Pressable>
+              <Text style={[styles.chevron, { color: theme.textSecondary }]}>›</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${run.title} 책장에서 삭제`}
+              disabled={remove.isPending}
+              onPress={() => setDeleteTarget(run)}
+              style={({ pressed }) => [
+                styles.cardDelete,
+                { backgroundColor: theme.backgroundElement, opacity: pressed || remove.isPending ? 0.55 : 1 },
+              ]}>
+              <Text style={[styles.cardDeleteText, { color: theme.accent }]}>삭제</Text>
+            </Pressable>
+          </View>
         ))}
         {runs.isFetching && !runs.data ? <ActivityIndicator accessibilityLabel="책장 불러오는 중" color={theme.primary} style={styles.loader} /> : null}
         {!items.length && !runs.isFetching && !runs.isError ? (
@@ -181,6 +214,15 @@ export default function LibraryScreen() {
           </View>
         ) : null}
       </View>
+      <ConfirmDialog
+        visible={Boolean(deleteTarget)}
+        title="책장에서 삭제할까요?"
+        message={deleteTarget ? `「${deleteTarget.title}」의 진척 기록과 공유된 독서 소식이 함께 삭제됩니다. 이 작업은 되돌릴 수 없어요.` : ''}
+        confirmLabel="삭제"
+        pending={remove.isPending}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => void deleteSelectedRun()}
+      />
     </Screen>
   );
 }
@@ -206,7 +248,8 @@ const styles = StyleSheet.create({
   sort: { minHeight: 38, borderWidth: 1, borderRadius: Radius.pill, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
   sortText: { fontSize: 11, fontWeight: '800' },
   list: { gap: 10 },
-  card: { minHeight: 132, borderWidth: 1, borderRadius: Radius.large, padding: 13, flexDirection: 'row', alignItems: 'center', gap: 13 },
+  card: { minHeight: 132, borderWidth: 1, borderRadius: Radius.large, padding: 13, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  cardMain: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 13 },
   bookInfo: { flex: 1, gap: 5 },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   status: { fontSize: 11, fontWeight: '900' },
@@ -215,6 +258,8 @@ const styles = StyleSheet.create({
   author: { fontSize: 12 },
   progress: { fontSize: 10, fontWeight: '700' },
   chevron: { fontSize: 25 },
+  cardDelete: { minWidth: 48, minHeight: 44, borderRadius: Radius.small, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 9 },
+  cardDeleteText: { fontSize: 11, fontWeight: '900' },
   empty: { borderRadius: Radius.large, padding: Spacing.five, alignItems: 'center', gap: 14 },
   emptyTitle: { fontSize: 16, fontWeight: '900', textAlign: 'center' },
   emptyCopy: { fontSize: 13, lineHeight: 19, textAlign: 'center' },
