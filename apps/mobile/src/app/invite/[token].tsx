@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Screen } from '@/components/product/screen';
+import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Radius, Spacing } from '@/constants/theme';
 import { useAcceptFriendInvite } from '@/features/social/hooks';
 import { useTheme } from '@/hooks/use-theme';
@@ -13,6 +14,11 @@ export default function AcceptInviteScreen() {
   const accept = useAcceptFriendInvite();
   const [friendName, setFriendName] = useState<string | null>(null);
   const token = Array.isArray(params.token) ? params.token[0] : params.token;
+
+  const acceptInvite = () => {
+    if (!token) return;
+    accept.mutate(token, { onSuccess: (friend) => setFriendName(friend.nickname) });
+  };
 
   return (
     <Screen contentContainerStyle={styles.page}>
@@ -28,16 +34,12 @@ export default function AcceptInviteScreen() {
         <Pressable
           accessibilityRole="button"
           disabled={!token || accept.isPending}
-          onPress={async () => {
-            if (!token) return;
-            const friend = await accept.mutateAsync(token);
-            setFriendName(friend.nickname);
-          }}
+          onPress={acceptInvite}
           style={[styles.button, { backgroundColor: theme.primary }]}>
           <Text style={[styles.buttonText, { color: theme.inverse }]}>{accept.isPending ? '연결하는 중…' : '초대 수락'}</Text>
         </Pressable>
       ) : null}
-      {accept.isError ? <Text style={[styles.error, { color: theme.accent }]}>{accept.error.message}</Text> : null}
+      {accept.isError ? <FeedbackBanner title="초대를 수락하지 못했어요" error={accept.error} onAction={acceptInvite} /> : null}
     </Screen>
   );
 }
@@ -50,5 +52,4 @@ const styles = StyleSheet.create({
   copy: { marginTop: 8, maxWidth: 330, fontSize: 14, lineHeight: 22, textAlign: 'center' },
   button: { marginTop: 24, minWidth: 210, minHeight: 54, borderRadius: Radius.medium, alignItems: 'center', justifyContent: 'center' },
   buttonText: { fontSize: 15, fontWeight: '900' },
-  error: { marginTop: 12, fontSize: 13, textAlign: 'center' },
 });

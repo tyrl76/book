@@ -17,6 +17,7 @@ import {
   restoreSession,
 } from '@/lib/session-storage';
 import type { AuthSession } from '@/types/domain';
+import { errorMessage } from '@/lib/error-message';
 
 type AuthContextValue = {
   loading: boolean;
@@ -46,7 +47,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setRegistrationOpen(status.registrationOpen);
     } catch (error) {
       setRegistrationOpen(null);
-      setStatusError(error instanceof Error ? error.message : '서버에 연결하지 못했습니다');
+      setStatusError(errorMessage(error, '서버에 연결하지 못했어요.'));
     }
   }, []);
 

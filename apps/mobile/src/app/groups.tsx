@@ -1,9 +1,11 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Screen } from '@/components/product/screen';
+import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Radius, Spacing } from '@/constants/theme';
+import { useFeedback } from '@/features/feedback/feedback-provider';
 import { useAcceptGroupInvite, useCreateGroup, useGroups } from '@/features/groups/hooks';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -13,6 +15,7 @@ function inviteToken(value: string) {
 
 export default function GroupsScreen() {
   const theme = useTheme();
+  const feedback = useFeedback();
   const groups = useGroups();
   const create = useCreateGroup();
   const accept = useAcceptGroupInvite();
@@ -26,7 +29,7 @@ export default function GroupsScreen() {
       setName('');
       router.push({ pathname: '/group/[groupID]', params: { groupID: group.id, name: group.name } });
     } catch (error) {
-      Alert.alert('그룹을 만들지 못했어요', error instanceof Error ? error.message : '다시 시도해 주세요');
+      feedback.showError('그룹을 만들지 못했어요', error, { label: '다시 시도', onPress: () => void createNew() });
     }
   };
 
@@ -38,7 +41,7 @@ export default function GroupsScreen() {
       setInvite('');
       router.push({ pathname: '/group/[groupID]', params: { groupID: group.id, name: group.name } });
     } catch (error) {
-      Alert.alert('그룹 초대를 수락하지 못했어요', error instanceof Error ? error.message : '초대 코드를 확인해 주세요');
+      feedback.showError('그룹 초대를 수락하지 못했어요', error, { label: '다시 시도', onPress: () => void acceptInvite() });
     }
   };
 
@@ -49,6 +52,10 @@ export default function GroupsScreen() {
         <Text style={[styles.title, { color: theme.text }]}>우리만의 독서 그룹</Text>
         <Text style={[styles.copy, { color: theme.textSecondary }]}>공개 커뮤니티 대신 최대 20명의 가까운 사람과 함께해요.</Text>
       </View>
+
+      {groups.isError ? (
+        <FeedbackBanner title="그룹 목록을 불러오지 못했어요" error={groups.error} onAction={() => void groups.refetch()} />
+      ) : null}
 
       <View style={[styles.createCard, { backgroundColor: theme.primarySoft, borderColor: theme.border }]}>
         <Text style={[styles.cardTitle, { color: theme.text }]}>새 그룹 만들기</Text>
@@ -85,7 +92,7 @@ export default function GroupsScreen() {
             <Text style={[styles.chevron, { color: theme.textSecondary }]}>›</Text>
           </Pressable>
         ))}
-        {!groups.data?.length && !groups.isFetching ? <Text style={[styles.empty, { color: theme.textSecondary }]}>아직 참여 중인 그룹이 없어요.</Text> : null}
+        {!groups.data?.length && !groups.isFetching && !groups.isError ? <Text style={[styles.empty, { color: theme.textSecondary }]}>아직 참여 중인 그룹이 없어요.</Text> : null}
       </View>
     </Screen>
   );

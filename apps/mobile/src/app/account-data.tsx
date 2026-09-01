@@ -3,14 +3,17 @@ import { useState } from 'react';
 import { Alert, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Screen } from '@/components/product/screen';
+import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Radius, Spacing } from '@/constants/theme';
 import { useDeleteUserData, useExportUserData, useStorageStatus } from '@/features/account/hooks';
 import { useAuth } from '@/features/auth/auth-provider';
+import { useFeedback } from '@/features/feedback/feedback-provider';
 import { useFailedCount, usePendingCount } from '@/features/reading/hooks';
 import { useTheme } from '@/hooks/use-theme';
 
 export default function AccountDataScreen() {
   const theme = useTheme();
+  const feedback = useFeedback();
   const auth = useAuth();
   const exportData = useExportUserData();
   const deleteData = useDeleteUserData();
@@ -24,7 +27,7 @@ export default function AccountDataScreen() {
       const payload = await exportData.mutateAsync();
       await Share.share({ title: '책결 데이터 내보내기', message: payload });
     } catch (error) {
-      Alert.alert('데이터를 내보내지 못했어요', error instanceof Error ? error.message : '다시 시도해 주세요');
+      feedback.showError('데이터를 내보내지 못했어요', error, { label: '다시 시도', onPress: () => void shareExport() });
     }
   };
 
@@ -41,7 +44,7 @@ export default function AccountDataScreen() {
             await auth.signOut();
             router.replace('/sign-in');
           } catch (error) {
-            Alert.alert('계정을 삭제하지 못했어요', error instanceof Error ? error.message : '다시 시도해 주세요');
+            feedback.showError('계정을 삭제하지 못했어요', error, { label: '다시 확인', onPress: removeAccount });
           }
         },
       },
@@ -55,6 +58,10 @@ export default function AccountDataScreen() {
         <Text style={[styles.title, { color: theme.text }]}>내 기록을 직접 관리해요</Text>
         <Text style={[styles.copy, { color: theme.textSecondary }]}>언제든 독서 기록을 내려받거나 책결 서버에서 삭제할 수 있어요.</Text>
       </View>
+
+      {storageStatus.isError ? (
+        <FeedbackBanner compact title="서버 저장 상태를 확인하지 못했어요" error={storageStatus.error} onAction={() => void storageStatus.refetch()} />
+      ) : null}
 
       <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
         <View style={styles.statusHeading}>

@@ -1,21 +1,33 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BookAddCard } from '@/components/product/book-add-card';
+import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { useBookByISBN, useCreateReadingRun } from '@/features/catalog/hooks';
+import { useFeedback } from '@/features/feedback/feedback-provider';
 import { useTheme } from '@/hooks/use-theme';
 import { ApiError } from '@/lib/api';
 import type { ReadingRun } from '@/types/domain';
 
 export default function ScanScreen() {
   const theme = useTheme();
+  const feedback = useFeedback();
   const [permission, requestPermission] = useCameraPermissions();
   const [isbn, setISBN] = useState<string | null>(null);
   const book = useBookByISBN(isbn);
   const create = useCreateReadingRun();
+
+  const askForCamera = async () => {
+    try {
+      if (permission?.canAskAgain === false) await Linking.openSettings();
+      else await requestPermission();
+    } catch (error) {
+      feedback.showError('카메라 설정을 열지 못했어요', error, { label: '다시 시도', onPress: () => void askForCamera() });
+    }
+  };
 
   const add = async (
     totalValue: number,
@@ -25,12 +37,16 @@ export default function ScanScreen() {
     if (!isbn) return;
     try {
       await create.mutateAsync({ isbn, totalValue, progressBasis, status });
-      Alert.alert(status === 'reading' ? '읽는 책에 추가했어요' : '읽고 싶은 책에 담았어요', undefined, [
-        { text: status === 'reading' ? '기록하러 가기' : '책장 보기', onPress: () => router.dismissTo(status === 'reading' ? '/record' : '/me') },
-      ]);
+      feedback.showSuccess(status === 'reading' ? '읽는 책에 추가했어요' : '읽고 싶은 책에 담았어요', undefined, {
+        label: status === 'reading' ? '기록하기' : '책장 보기',
+        onPress: () => router.dismissTo(status === 'reading' ? '/record' : '/library'),
+      });
     } catch (error) {
       const message = error instanceof ApiError && error.status === 409 ? '이미 읽는 중인 책입니다.' : error instanceof Error ? error.message : '책을 추가하지 못했습니다.';
-      Alert.alert('추가하지 못했어요', message);
+      feedback.showError('책을 추가하지 못했어요', new Error(message), {
+        label: '다시 시도',
+        onPress: () => void add(totalValue, progressBasis, status),
+      });
     }
   };
 
@@ -46,9 +62,9 @@ export default function ScanScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="카메라 권한 허용"
-          onPress={requestPermission}
+          onPress={() => void askForCamera()}
           style={({ pressed }) => [styles.permissionButton, { backgroundColor: theme.primary, opacity: pressed ? 0.74 : 1 }]}>
-          <Text style={[styles.buttonText, { color: theme.inverse }]}>카메라 허용</Text>
+          <Text style={[styles.buttonText, { color: theme.inverse }]}>{permission.canAskAgain === false ? '설정에서 카메라 허용' : '카메라 허용'}</Text>
         </Pressable>
       </SafeAreaView>
     );
@@ -83,6 +99,8 @@ export default function ScanScreen() {
             </View>
             {book.isLoading ? (
               <ActivityIndicator color={theme.primary} style={styles.loading} />
+            ) : book.isError ? (
+              <FeedbackBanner title="책 정보를 불러오지 못했어요" error={book.error} onAction={() => void book.refetch()} compact />
             ) : book.data ? (
               <BookAddCard book={book.data} compact pending={create.isPending} onAdd={add} />
             ) : (

@@ -1,10 +1,11 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Screen } from '@/components/product/screen';
 import { Radius, Spacing } from '@/constants/theme';
 import { useCreateManualReadingRun } from '@/features/catalog/hooks';
+import { useFeedback } from '@/features/feedback/feedback-provider';
 import { useTheme } from '@/hooks/use-theme';
 import type { ReadingRun } from '@/types/domain';
 
@@ -16,6 +17,7 @@ const basisOptions: { value: ReadingRun['progressBasis']; label: string; unit: s
 
 export default function ManualBookScreen() {
   const theme = useTheme();
+  const feedback = useFeedback();
   const create = useCreateManualReadingRun();
   const params = useLocalSearchParams<{ title?: string }>();
   const initialTitle = Array.isArray(params.title) ? params.title[0] : params.title;
@@ -26,18 +28,21 @@ export default function ManualBookScreen() {
   const [status, setStatus] = useState<Extract<ReadingRun['status'], 'reading' | 'want_to_read'>>('reading');
   const numericAmount = Number(amount);
   const totalValue = basis === 'percent' ? 100 : basis === 'audio_seconds' ? numericAmount * 60 : numericAmount;
+  const amountValid = basis === 'percent' || (Number.isInteger(numericAmount) && numericAmount > 0 && totalValue <= 1_000_000);
   const valid = title.trim().length > 0 && title.trim().length <= 200 && author.trim().length <= 120 &&
-    (basis === 'percent' || (Number.isInteger(numericAmount) && numericAmount > 0 && totalValue <= 1_000_000));
+    amountValid;
 
   const save = async () => {
     if (!valid) return;
     try {
       await create.mutateAsync({ title: title.trim(), author: author.trim(), totalValue, progressBasis: basis, status });
-      Alert.alert(status === 'reading' ? '읽는 책에 추가했어요' : '읽고 싶은 책에 담았어요', undefined, [
-        { text: '확인', onPress: () => router.dismissTo(status === 'reading' ? '/record' : '/me') },
-      ]);
+      feedback.showSuccess(
+        status === 'reading' ? '읽는 책에 추가했어요' : '읽고 싶은 책에 담았어요',
+        undefined,
+        { label: status === 'reading' ? '기록하기' : '책장 보기', onPress: () => router.dismissTo(status === 'reading' ? '/record' : '/library') },
+      );
     } catch (error) {
-      Alert.alert('책을 등록하지 못했어요', error instanceof Error ? error.message : '다시 시도해 주세요');
+      feedback.showError('책을 등록하지 못했어요', error, { label: '다시 시도', onPress: () => void save() });
     }
   };
 
@@ -85,6 +90,9 @@ export default function ManualBookScreen() {
             <Text style={[styles.percentText, { color: theme.textSecondary }]}>전자책은 전체 분량 없이 0~100%로 기록합니다.</Text>
           </View>
         )}
+        {basis !== 'percent' && amount && !amountValid ? (
+          <Text accessibilityLiveRegion="polite" style={[styles.validation, { color: theme.accent }]}>분량은 1 이상의 숫자로 입력해 주세요.</Text>
+        ) : null}
 
         <View style={styles.field}>
           <Text style={[styles.label, { color: theme.text }]}>책장에 추가</Text>
@@ -138,6 +146,7 @@ const styles = StyleSheet.create({
   unit: { paddingRight: 14, fontSize: 13, fontWeight: '800' },
   percentNotice: { borderRadius: Radius.medium, padding: Spacing.three },
   percentText: { fontSize: 12, lineHeight: 18 },
+  validation: { marginTop: -14, fontSize: 12, lineHeight: 18, fontWeight: '700' },
   save: { minHeight: 54, borderRadius: Radius.medium, alignItems: 'center', justifyContent: 'center' },
   saveText: { fontSize: 15, fontWeight: '900' },
 });

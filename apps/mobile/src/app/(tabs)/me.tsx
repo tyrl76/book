@@ -1,11 +1,13 @@
 import { router } from 'expo-router';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ProgressBar } from '@/components/product/progress-bar';
 import { Screen } from '@/components/product/screen';
+import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Radius, Spacing } from '@/constants/theme';
 import { useProfile, useReadingStats } from '@/features/account/hooks';
 import { useAuth } from '@/features/auth/auth-provider';
+import { useFeedback } from '@/features/feedback/feedback-provider';
 import { useReadingRuns } from '@/features/reading/hooks';
 import { type ThemePreference, useThemeSelection } from '@/features/theme/theme-provider';
 import { useTheme } from '@/hooks/use-theme';
@@ -36,6 +38,7 @@ const settings = [
 
 export default function MeScreen() {
   const theme = useTheme();
+  const feedback = useFeedback();
   const themeSelection = useThemeSelection();
   const auth = useAuth();
   const profile = useProfile();
@@ -47,6 +50,7 @@ export default function MeScreen() {
   const goal = stats.data?.annualGoalBooks ?? 0;
   const finished = stats.data?.annualFinishedBooks ?? 0;
   const goalProgress = goal > 0 ? Math.min(100, (finished / goal) * 100) : 0;
+  const pageError = profile.error ?? stats.error ?? runs.error;
 
   const shelfCount = (status: ReadingRun['status']) => (runs.data ?? []).filter((run) => run.status === status).length;
 
@@ -54,7 +58,7 @@ export default function MeScreen() {
     try {
       await auth.signOut();
     } catch (error) {
-      Alert.alert('로그아웃하지 못했어요', error instanceof Error ? error.message : '다시 시도해 주세요');
+      feedback.showError('로그아웃하지 못했어요', error, { label: '다시 시도', onPress: () => void signOut() });
     }
   };
 
@@ -64,6 +68,28 @@ export default function MeScreen() {
         <Text style={[styles.eyebrow, { color: theme.primary }]}>MY BOOKGYEOL</Text>
         <Text style={[styles.pageTitle, { color: theme.text }]}>나의 독서</Text>
       </View>
+
+      {runs.syncError ? (
+        <FeedbackBanner
+          compact
+          tone="warning"
+          title="저장된 독서 정보를 표시하고 있어요"
+          error={runs.syncError}
+          actionLabel="다시 연결"
+          onAction={() => void runs.refetch()}
+        />
+      ) : null}
+      {pageError ? (
+        <FeedbackBanner
+          title="내 독서 정보를 모두 불러오지 못했어요"
+          error={pageError}
+          onAction={() => {
+            void profile.refetch();
+            void stats.refetch();
+            void runs.refetch();
+          }}
+        />
+      ) : null}
 
       <Pressable
         accessibilityRole="button"

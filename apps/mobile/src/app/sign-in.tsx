@@ -2,7 +2,6 @@ import { Redirect } from 'expo-router';
 import { type ComponentProps, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -13,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Radius, Spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/auth-provider';
 import { useTheme } from '@/hooks/use-theme';
@@ -25,6 +25,7 @@ export default function SignInScreen() {
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
   const [pending, setPending] = useState(false);
+  const [formError, setFormError] = useState<unknown>(null);
   const sessionStorageCopy = Platform.OS === 'web'
     ? '로그인 정보는 현재 브라우저에 보관됩니다.'
     : '로그인 정보는 Android 보안 저장소에 보관됩니다.';
@@ -42,14 +43,12 @@ export default function SignInScreen() {
   const submit = async () => {
     if (!valid || pending) return;
     setPending(true);
+    setFormError(null);
     try {
       if (isRegistration) await auth.register(nickname, email, password);
       else await auth.signIn(email, password);
     } catch (error) {
-      Alert.alert(
-        isRegistration ? '계정을 만들지 못했어요' : '로그인하지 못했어요',
-        error instanceof Error ? error.message : '잠시 후 다시 시도해 주세요',
-      );
+      setFormError(error);
     } finally {
       setPending(false);
     }
@@ -96,17 +95,32 @@ export default function SignInScreen() {
           </View>
         </View>
 
+        {formError ? (
+          <FeedbackBanner
+            title={isRegistration ? '계정을 만들지 못했어요' : '로그인하지 못했어요'}
+            error={formError}
+            actionLabel="다시 시도"
+            onAction={submit}
+          />
+        ) : null}
+
         <View style={[styles.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
           {isRegistration ? (
             <Field label="닉네임" value={nickname} onChangeText={setNickname} placeholder="앱에서 사용할 이름" theme={theme} autoCapitalize="none" />
           ) : null}
           <Field label="이메일" value={email} onChangeText={setEmail} placeholder="name@example.com" theme={theme} autoCapitalize="none" autoComplete="email" keyboardType="email-address" />
+          {email.length > 0 && !email.trim().includes('@') ? (
+            <Text accessibilityLiveRegion="polite" style={[styles.validation, { color: theme.accent }]}>올바른 이메일 주소를 입력해 주세요.</Text>
+          ) : null}
           <Field label="비밀번호" value={password} onChangeText={setPassword} placeholder="10자 이상" theme={theme} secureTextEntry autoCapitalize="none" autoComplete={isRegistration ? 'new-password' : 'current-password'} />
+          {password.length > 0 && password.length < 10 ? (
+            <Text accessibilityLiveRegion="polite" style={[styles.validation, { color: theme.accent }]}>비밀번호는 10자 이상이어야 해요.</Text>
+          ) : null}
           {isRegistration ? (
             <Field label="비밀번호 확인" value={passwordConfirmation} onChangeText={setPasswordConfirmation} placeholder="한 번 더 입력" theme={theme} secureTextEntry autoCapitalize="none" autoComplete="new-password" />
           ) : null}
           {isRegistration && passwordConfirmation && password !== passwordConfirmation ? (
-            <Text style={[styles.validation, { color: theme.accent }]}>비밀번호가 서로 달라요.</Text>
+            <Text accessibilityLiveRegion="polite" style={[styles.validation, { color: theme.accent }]}>비밀번호가 서로 달라요.</Text>
           ) : null}
 
           <Pressable

@@ -1,14 +1,17 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Screen } from '@/components/product/screen';
+import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Radius, Spacing } from '@/constants/theme';
 import { useProfile, useUpdateProfile } from '@/features/account/hooks';
+import { useFeedback } from '@/features/feedback/feedback-provider';
 import { useTheme } from '@/hooks/use-theme';
 
 export default function ProfileEditScreen() {
   const theme = useTheme();
+  const feedback = useFeedback();
   const profile = useProfile();
   const update = useUpdateProfile();
   const [nicknameDraft, setNicknameDraft] = useState<string | null>(null);
@@ -24,7 +27,7 @@ export default function ProfileEditScreen() {
       await update.mutateAsync({ nickname: nickname.trim(), bio: bio.trim() });
       router.back();
     } catch (error) {
-      Alert.alert('프로필을 저장하지 못했어요', error instanceof Error ? error.message : '다시 시도해 주세요');
+      feedback.showError('프로필을 저장하지 못했어요', error, { label: '다시 시도', onPress: () => void save() });
     }
   };
 
@@ -35,6 +38,9 @@ export default function ProfileEditScreen() {
         <Text style={[styles.title, { color: theme.text }]}>나를 소개해 주세요</Text>
         <Text style={[styles.copy, { color: theme.textSecondary }]}>연결된 친구에게만 표시되는 독서 프로필이에요.</Text>
       </View>
+      {profile.isError ? (
+        <FeedbackBanner title="프로필을 불러오지 못했어요" error={profile.error} onAction={() => void profile.refetch()} />
+      ) : null}
       <View style={styles.form}>
         <View style={styles.field}>
           <View style={styles.labelRow}>
@@ -50,6 +56,9 @@ export default function ProfileEditScreen() {
             placeholderTextColor={theme.textSecondary}
             style={[styles.input, { color: theme.text, backgroundColor: theme.card, borderColor: theme.border }]}
           />
+          {nickname.length > 0 && !nickname.trim() ? (
+            <Text accessibilityLiveRegion="polite" style={[styles.errorText, { color: theme.accent }]}>공백이 아닌 닉네임을 입력해 주세요.</Text>
+          ) : null}
         </View>
         <View style={styles.field}>
           <View style={styles.labelRow}>
@@ -92,6 +101,7 @@ const styles = StyleSheet.create({
   counter: { fontSize: 11, fontWeight: '700' },
   input: { minHeight: 54, borderWidth: 1, borderRadius: Radius.medium, paddingHorizontal: 14, fontSize: 15 },
   bioInput: { minHeight: 120, borderWidth: 1, borderRadius: Radius.medium, padding: 14, fontSize: 14, lineHeight: 21, textAlignVertical: 'top' },
+  errorText: { fontSize: 12, lineHeight: 17, fontWeight: '700' },
   save: { minHeight: 54, borderRadius: Radius.medium, alignItems: 'center', justifyContent: 'center' },
   saveText: { fontSize: 15, fontWeight: '900' },
 });

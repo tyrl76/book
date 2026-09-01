@@ -1,8 +1,10 @@
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Screen } from '@/components/product/screen';
+import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Radius, Spacing } from '@/constants/theme';
 import { useNotificationPreferences, useUpdateNotificationPreferences } from '@/features/account/hooks';
+import { useFeedback } from '@/features/feedback/feedback-provider';
 import { useTheme } from '@/hooks/use-theme';
 import { disablePushTokens } from '@/lib/api';
 import { enablePushNotifications } from '@/lib/push-notifications';
@@ -18,6 +20,7 @@ const items: { key: keyof Pick<NotificationPreferences, 'pushEnabled' | 'friendR
 
 export default function NotificationsScreen() {
   const theme = useTheme();
+  const feedback = useFeedback();
   const preferences = useNotificationPreferences();
   const update = useUpdateNotificationPreferences();
   const value = preferences.data;
@@ -30,7 +33,7 @@ export default function NotificationsScreen() {
       }
       await update.mutateAsync(next);
     } catch (error) {
-      Alert.alert('알림 설정을 저장하지 못했어요', error instanceof Error ? error.message : '다시 시도해 주세요');
+      feedback.showError('알림 설정을 저장하지 못했어요', error, { label: '다시 시도', onPress: () => void save(next) });
     }
   };
 
@@ -41,6 +44,9 @@ export default function NotificationsScreen() {
         <Text style={[styles.title, { color: theme.text }]}>부담 없는 알림</Text>
         <Text style={[styles.copy, { color: theme.textSecondary }]}>읽지 않았다는 압박 대신 친구와 이어지는 순간만 골라 알려드려요.</Text>
       </View>
+      {preferences.isError ? (
+        <FeedbackBanner title="알림 설정을 불러오지 못했어요" error={preferences.error} onAction={() => void preferences.refetch()} />
+      ) : null}
       {value ? (
         <View style={[styles.list, { backgroundColor: theme.card, borderColor: theme.border }]}>
           {items.map((item, index) => (
@@ -48,6 +54,7 @@ export default function NotificationsScreen() {
               key={item.key}
               accessibilityRole="switch"
               accessibilityState={{ checked: value[item.key] }}
+              disabled={update.isPending}
               onPress={() => void save({ ...value, [item.key]: !value[item.key] })}
               style={[styles.row, index < items.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
               <View style={styles.rowCopy}>
@@ -58,7 +65,7 @@ export default function NotificationsScreen() {
             </Pressable>
           ))}
         </View>
-      ) : <Text style={[styles.loading, { color: theme.textSecondary }]}>알림 설정을 불러오는 중…</Text>}
+      ) : !preferences.isError ? <Text style={[styles.loading, { color: theme.textSecondary }]}>알림 설정을 불러오는 중…</Text> : null}
 
       {value ? (
         <Pressable

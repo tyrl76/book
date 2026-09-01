@@ -1,9 +1,11 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { BookAddCard } from '@/components/product/book-add-card';
 import { Screen } from '@/components/product/screen';
+import { FeedbackBanner } from '@/components/ui/feedback-banner';
+import { useFeedback } from '@/features/feedback/feedback-provider';
 import { useBookSearch, useCreateReadingRun } from '@/features/catalog/hooks';
 import { useTheme } from '@/hooks/use-theme';
 import { ApiError } from '@/lib/api';
@@ -11,6 +13,7 @@ import type { ReadingRun } from '@/types/domain';
 
 export default function BookSearchScreen() {
   const theme = useTheme();
+  const feedback = useFeedback();
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   useEffect(() => {
@@ -30,12 +33,17 @@ export default function BookSearchScreen() {
   ) => {
     try {
       await create.mutateAsync({ isbn, totalValue, progressBasis, status });
-      Alert.alert(status === 'reading' ? '읽는 책에 추가했어요' : '읽고 싶은 책에 담았어요', status === 'reading' ? '공개 설정에 따라 첫 독서 시작도 공유됩니다.' : '내 책장에서 언제든 읽기를 시작할 수 있어요.', [
-        { text: status === 'reading' ? '기록하러 가기' : '책장 보기', onPress: () => router.dismissTo(status === 'reading' ? '/record' : '/me') },
-      ]);
+      feedback.showSuccess(
+        status === 'reading' ? '읽는 책에 추가했어요' : '읽고 싶은 책에 담았어요',
+        status === 'reading' ? '첫 독서 기록을 바로 남겨보세요.' : '내 책장에서 언제든 읽기를 시작할 수 있어요.',
+        { label: status === 'reading' ? '기록하기' : '책장 보기', onPress: () => router.dismissTo(status === 'reading' ? '/record' : '/library') },
+      );
     } catch (error) {
       const message = error instanceof ApiError && error.status === 409 ? '이미 읽는 중인 책입니다.' : error instanceof Error ? error.message : '책을 추가하지 못했습니다.';
-      Alert.alert('추가하지 못했어요', message);
+      feedback.showError('책을 추가하지 못했어요', new Error(message), {
+        label: '다시 시도',
+        onPress: () => void add(isbn, totalValue, progressBasis, status),
+      });
     }
   };
 
@@ -84,13 +92,7 @@ export default function BookSearchScreen() {
       ) : waitingForSearch || search.isLoading ? (
         <ActivityIndicator color={theme.primary} style={styles.loader} />
       ) : search.isError ? (
-        <View style={styles.state}>
-          <Text style={[styles.stateTitle, { color: theme.text }]}>검색하지 못했어요</Text>
-          <Text style={[styles.stateCopy, { color: theme.textSecondary }]}>{search.error.message}</Text>
-          <Pressable accessibilityRole="button" onPress={() => search.refetch()} style={[styles.manualButton, { backgroundColor: theme.primary }]}>
-            <Text style={[styles.manualButtonText, { color: theme.inverse }]}>다시 검색</Text>
-          </Pressable>
-        </View>
+        <FeedbackBanner title="책을 검색하지 못했어요" error={search.error} actionLabel="다시 검색" onAction={() => void search.refetch()} />
       ) : search.data?.length ? (
         <View style={styles.results}>
           <Text style={[styles.count, { color: theme.textSecondary }]}>검색 결과 {search.data.length}권</Text>

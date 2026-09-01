@@ -1,10 +1,12 @@
 import { router } from 'expo-router';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BookCover } from '@/components/product/book-cover';
 import { ProgressBar } from '@/components/product/progress-bar';
 import { Screen } from '@/components/product/screen';
+import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Radius, Spacing } from '@/constants/theme';
+import { useFeedback } from '@/features/feedback/feedback-provider';
 import { useFeed } from '@/features/feed/hooks';
 import { useFeedReaction, useFriends } from '@/features/social/hooks';
 import { useTheme } from '@/hooks/use-theme';
@@ -29,6 +31,7 @@ function relativeTime(value: string) {
 
 export default function TogetherScreen() {
   const theme = useTheme();
+  const feedback = useFeedback();
   const feed = useFeed();
   const friends = useFriends();
   const reaction = useFeedReaction();
@@ -54,6 +57,20 @@ export default function TogetherScreen() {
           <Text style={[styles.avatarText, { color: theme.inverse }]}>결</Text>
         </Pressable>
       </View>
+
+      {feed.syncError ? (
+        <FeedbackBanner
+          compact
+          tone="warning"
+          title="저장된 소식을 표시하고 있어요"
+          error={feed.syncError}
+          actionLabel="다시 연결"
+          onAction={() => void feed.refetch()}
+        />
+      ) : null}
+      {feed.isError ? (
+        <FeedbackBanner title="독서 근황을 불러오지 못했어요" error={feed.error} onAction={() => void feed.refetch()} />
+      ) : null}
 
       <View style={[styles.summary, { backgroundColor: theme.primarySoft, borderColor: theme.border }]}>
         <View style={styles.summaryCopy}>
@@ -88,7 +105,9 @@ export default function TogetherScreen() {
           <Text style={[styles.sectionTitle, { color: theme.text }]}>지금 읽는 친구</Text>
           <Text style={[styles.sectionMeta, { color: theme.textSecondary }]}>{liveFriends.length}명</Text>
         </View>
-        {friends.isFetching && !friends.data ? (
+        {friends.isError ? (
+          <FeedbackBanner compact title="친구 상태를 불러오지 못했어요" error={friends.error} onAction={() => void friends.refetch()} />
+        ) : friends.isFetching && !friends.data ? (
           <ActivityIndicator color={theme.primary} />
         ) : liveFriends.length ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.friendList}>
@@ -158,10 +177,15 @@ export default function TogetherScreen() {
                     accessibilityState={{ selected: item.reactedByViewer, disabled: reaction.isPending }}
                     accessibilityLabel={`${item.actorNickname}님에게 응원 ${item.reactedByViewer ? '취소' : '보내기'}`}
                     disabled={reaction.isPending}
-                    onPress={() => reaction.mutate(
-                      { eventID: item.id, active: !item.reactedByViewer },
-                      { onError: (error) => Alert.alert('응원을 반영하지 못했어요', error.message) },
-                    )}
+                    onPress={() => {
+                      const input = { eventID: item.id, active: !item.reactedByViewer };
+                      reaction.mutate(input, {
+                        onError: (error) => feedback.showError('응원을 반영하지 못했어요', error, {
+                          label: '다시 시도',
+                          onPress: () => reaction.mutate(input),
+                        }),
+                      });
+                    }}
                     style={[styles.footerButton, item.reactedByViewer && { backgroundColor: theme.primarySoft }]}>
                     <Text style={[styles.footerMeta, { color: theme.primary }]}>{item.reactedByViewer ? '♥' : '♡'} 응원 {item.reactionCount}개</Text>
                   </Pressable>
@@ -178,7 +202,7 @@ export default function TogetherScreen() {
             </View>
           ))}
 
-          {!events.length && !feed.isFetching ? (
+          {!events.length && !feed.isFetching && !feed.isError ? (
             <View style={[styles.emptyCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
               <Text style={[styles.emptyTitle, { color: theme.text }]}>아직 새 독서 소식이 없어요</Text>
               <Text style={[styles.emptyCopy, { color: theme.textSecondary }]}>친구를 초대하면 서로의 첫 기록부터 이어볼 수 있어요.</Text>

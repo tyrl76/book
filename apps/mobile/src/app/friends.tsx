@@ -4,7 +4,9 @@ import { Alert, Pressable, Share, StyleSheet, Text, TextInput, View } from 'reac
 
 import { ProgressBar } from '@/components/product/progress-bar';
 import { Screen } from '@/components/product/screen';
+import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Radius, Spacing } from '@/constants/theme';
+import { useFeedback } from '@/features/feedback/feedback-provider';
 import {
   useAcceptFriendInvite,
   useBlockUser,
@@ -20,6 +22,7 @@ function inviteToken(value: string) {
 
 export default function FriendsScreen() {
   const theme = useTheme();
+  const feedback = useFeedback();
   const friends = useFriends();
   const createInvite = useCreateFriendInvite();
   const acceptInvite = useAcceptFriendInvite();
@@ -35,7 +38,7 @@ export default function FriendsScreen() {
         message: `책결에서 서로의 독서 근황을 나눠요.\n${invite.deepLink}\n초대 코드: ${invite.token}`,
       });
     } catch (error) {
-      Alert.alert('초대를 만들지 못했어요', error instanceof Error ? error.message : '다시 시도해 주세요');
+      feedback.showError('초대를 만들지 못했어요', error, { label: '다시 시도', onPress: () => void shareInvite() });
     }
   };
 
@@ -45,9 +48,9 @@ export default function FriendsScreen() {
     try {
       const friend = await acceptInvite.mutateAsync(token);
       setInviteInput('');
-      Alert.alert(`${friend.nickname}님과 연결됐어요`, '이제 서로의 독서 마일스톤을 볼 수 있어요.');
+      feedback.showSuccess(`${friend.nickname}님과 연결됐어요`, '이제 서로의 독서 마일스톤을 볼 수 있어요.');
     } catch (error) {
-      Alert.alert('초대를 수락하지 못했어요', error instanceof Error ? error.message : '초대 코드를 확인해 주세요');
+      feedback.showError('초대를 수락하지 못했어요', error, { label: '다시 시도', onPress: () => void accept() });
     }
   };
 
@@ -62,7 +65,14 @@ export default function FriendsScreen() {
         {
           text: action === 'block' ? '차단' : '연결 끊기',
           style: 'destructive',
-          onPress: () => action === 'block' ? block.mutate({ userID, active: true }) : remove.mutate(userID),
+          onPress: () => {
+            const options = {
+              onSuccess: () => feedback.showSuccess(action === 'block' ? `${nickname}님을 차단했어요` : `${nickname}님과의 연결을 끊었어요`),
+              onError: (error: Error) => feedback.showError(action === 'block' ? '차단하지 못했어요' : '연결을 끊지 못했어요', error),
+            };
+            if (action === 'block') block.mutate({ userID, active: true }, options);
+            else remove.mutate(userID, options);
+          },
         },
       ],
     );
@@ -88,6 +98,10 @@ export default function FriendsScreen() {
           <Text style={[styles.primaryButtonText, { color: theme.inverse }]}>{createInvite.isPending ? '초대 만드는 중…' : '초대 링크 공유'}</Text>
         </Pressable>
       </View>
+
+      {friends.isError ? (
+        <FeedbackBanner title="친구 목록을 불러오지 못했어요" error={friends.error} onAction={() => void friends.refetch()} />
+      ) : null}
 
       <Pressable
         accessibilityRole="button"
@@ -153,12 +167,12 @@ export default function FriendsScreen() {
               <Text style={[styles.moreText, { color: theme.textSecondary }]}>•••</Text>
             </Pressable>
           </View>
-        )) : (
+        )) : !friends.isFetching && !friends.isError ? (
           <View style={[styles.empty, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <Text style={[styles.emptyTitle, { color: theme.text }]}>첫 독서 친구를 초대해 보세요</Text>
             <Text style={[styles.emptyCopy, { color: theme.textSecondary }]}>친구 한 명만 연결돼도 서로의 독서 흐름을 이어볼 수 있어요.</Text>
           </View>
-        )}
+        ) : null}
       </View>
 
       <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>

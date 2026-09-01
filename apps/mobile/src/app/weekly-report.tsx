@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Screen } from '@/components/product/screen';
+import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Radius, Spacing } from '@/constants/theme';
 import { useWeeklyReport } from '@/features/groups/hooks';
 import { useTheme } from '@/hooks/use-theme';
@@ -27,6 +28,9 @@ export default function WeeklyReportScreen() {
         <Text style={[styles.title, { color: theme.text }]}>우리의 독서 한 주</Text>
         <Text style={[styles.copy, { color: theme.textSecondary }]}>{item ? `${item.weekStart} – ${item.weekEnd}` : '이번 주 기록을 모으는 중…'}</Text>
       </View>
+      {report.isError ? (
+        <FeedbackBanner title="이번 주 리포트를 불러오지 못했어요" error={report.error} onAction={() => void report.refetch()} />
+      ) : null}
       <View style={[styles.hero, { backgroundColor: theme.primarySoft, borderColor: theme.border }]}>
         <Text style={[styles.heroLabel, { color: theme.primary }]}>나의 독서 시간</Text>
         <Text style={[styles.heroValue, { color: theme.text }]}>{durationLabel(item?.myDurationSeconds ?? 0)}</Text>

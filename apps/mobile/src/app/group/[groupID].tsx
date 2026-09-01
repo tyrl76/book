@@ -3,12 +3,15 @@ import { Alert, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 
 import { ProgressBar } from '@/components/product/progress-bar';
 import { Screen } from '@/components/product/screen';
+import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Radius, Spacing } from '@/constants/theme';
+import { useFeedback } from '@/features/feedback/feedback-provider';
 import { useCreateGroupInvite, useGroupMembers, useGroups, useLeaveGroup } from '@/features/groups/hooks';
 import { useTheme } from '@/hooks/use-theme';
 
 export default function GroupDetailScreen() {
   const theme = useTheme();
+  const feedback = useFeedback();
   const params = useLocalSearchParams<{ groupID: string; name?: string }>();
   const groupID = Array.isArray(params.groupID) ? params.groupID[0] : params.groupID;
   const routeName = Array.isArray(params.name) ? params.name[0] : params.name;
@@ -24,7 +27,7 @@ export default function GroupDetailScreen() {
       const item = await invite.mutateAsync();
       await Share.share({ title: `${name} 초대`, message: `책결의 “${name}” 그룹에서 함께 읽어요.\n${item.deepLink}\n초대 코드: ${item.token}` });
     } catch (error) {
-      Alert.alert('초대를 만들지 못했어요', error instanceof Error ? error.message : '다시 시도해 주세요');
+      feedback.showError('초대를 만들지 못했어요', error, { label: '다시 시도', onPress: () => void shareInvite() });
     }
   };
 
@@ -33,7 +36,7 @@ export default function GroupDetailScreen() {
       { text: '취소', style: 'cancel' },
       { text: group?.role === 'owner' ? '삭제' : '나가기', style: 'destructive', onPress: async () => {
         try { await leave.mutateAsync(groupID ?? ''); router.back(); }
-        catch (error) { Alert.alert('그룹을 정리하지 못했어요', error instanceof Error ? error.message : '다시 시도해 주세요'); }
+        catch (error) { feedback.showError('그룹을 정리하지 못했어요', error, { label: '다시 확인', onPress: leaveGroup }); }
       } },
     ]);
   };
@@ -41,6 +44,8 @@ export default function GroupDetailScreen() {
   return (
     <Screen>
       <Stack.Screen options={{ title: name }} />
+      {groups.isError ? <FeedbackBanner compact title="그룹 정보를 불러오지 못했어요" error={groups.error} onAction={() => void groups.refetch()} /> : null}
+      {members.isError ? <FeedbackBanner compact title="그룹 멤버를 불러오지 못했어요" error={members.error} onAction={() => void members.refetch()} /> : null}
       <View style={[styles.hero, { backgroundColor: theme.primarySoft, borderColor: theme.border }]}>
         <View style={[styles.mark, { backgroundColor: theme.primary }]}><Text style={[styles.markText, { color: theme.inverse }]}>함</Text></View>
         <View style={styles.heroCopy}><Text style={[styles.title, { color: theme.text }]}>{name}</Text><Text style={[styles.copy, { color: theme.textSecondary }]}>{members.data?.length ?? group?.memberCount ?? 0}명이 각자의 책을 읽고 있어요.</Text></View>

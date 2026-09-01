@@ -1,12 +1,14 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
 import { BookCover } from '@/components/product/book-cover';
 import { ProgressBar } from '@/components/product/progress-bar';
 import { Screen } from '@/components/product/screen';
+import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Radius, Spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/auth-provider';
+import { useFeedback } from '@/features/feedback/feedback-provider';
 import {
   useFailedCount,
   usePendingCount,
@@ -60,6 +62,7 @@ function restoreReadingTimer(userID: string | null): StoredReadingTimer | null {
 
 export default function RecordScreen() {
   const theme = useTheme();
+  const feedback = useFeedback();
   const { width } = useWindowDimensions();
   const compact = width < 520;
   const { userID } = useAuth();
@@ -159,12 +162,24 @@ export default function RecordScreen() {
       setTimerStartedAt(null);
       setTimerAccumulated(0);
       presence.mutate({ readingRunID: currentRun.id, active: false });
-      Alert.alert(
+      feedback.showSuccess(
         summary.synced > 0 ? '기록했어요' : '기기에 안전하게 저장했어요',
         summary.synced > 0 ? '친구 피드에도 곧 반영됩니다.' : '연결이 돌아오면 자동으로 동기화합니다.',
       );
     } catch (error) {
-      Alert.alert('기록을 저장하지 못했어요', error instanceof Error ? error.message : '잠시 후 다시 시도해 주세요.');
+      feedback.showError('기록을 저장하지 못했어요', error, { label: '다시 시도', onPress: () => void save() });
+    }
+  };
+
+  const retrySync = async () => {
+    try {
+      const summary = await retryFailed.mutateAsync();
+      feedback.showSuccess(
+        summary.failed > 0 ? '일부 기록은 아직 보내지 못했어요' : '동기화를 완료했어요',
+        summary.failed > 0 ? `실패한 기록 ${summary.failed}개는 다음 연결 때 다시 시도합니다.` : '저장한 기록이 서버에 반영됐어요.',
+      );
+    } catch (error) {
+      feedback.showError('동기화를 다시 시작하지 못했어요', error, { label: '다시 시도', onPress: () => void retrySync() });
     }
   };
 
@@ -246,6 +261,20 @@ export default function RecordScreen() {
         </View>
       </View>
 
+      {runs.syncError ? (
+        <FeedbackBanner
+          compact
+          tone="warning"
+          title="저장된 책 목록을 표시하고 있어요"
+          error={runs.syncError}
+          actionLabel="다시 연결"
+          onAction={() => void runs.refetch()}
+        />
+      ) : null}
+      {runs.isError ? (
+        <FeedbackBanner title="기록할 책을 불러오지 못했어요" error={runs.error} onAction={() => void runs.refetch()} />
+      ) : null}
+
       {(pending.data ?? 0) > 0 ? (
         <View style={[styles.syncBanner, { backgroundColor: theme.primarySoft }]}>
           <Text style={[styles.syncText, { color: theme.primary }]}>↻ 연결되면 동기화할 기록 {pending.data}개</Text>
@@ -256,7 +285,7 @@ export default function RecordScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`동기화 실패 기록 ${failed.data}개 다시 시도`}
-          onPress={() => retryFailed.mutate()}
+          onPress={() => void retrySync()}
           style={[styles.failedBanner, { backgroundColor: theme.backgroundElement, borderColor: theme.accent }]}>
           <Text style={[styles.failedText, { color: theme.accent }]}>동기화 실패 {failed.data}개 · 다시 시도</Text>
         </Pressable>
@@ -453,7 +482,9 @@ export default function RecordScreen() {
             </Text>
           </Pressable>
         </View>
-      ) : (
+      ) : runs.isFetching ? (
+        <ActivityIndicator accessibilityLabel="기록할 책 불러오는 중" color={theme.primary} style={styles.loader} />
+      ) : !runs.isError ? (
         <View style={[styles.emptyWrap, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <Text style={[styles.emptyTitle, { color: theme.text }]}>지금 읽는 책을 추가해 보세요</Text>
           <Text style={[styles.empty, { color: theme.textSecondary }]}>제목으로 찾거나 ISBN 바코드를 스캔할 수 있어요.</Text>
@@ -464,7 +495,7 @@ export default function RecordScreen() {
             <Text style={[styles.saveText, { color: theme.inverse }]}>책 찾기</Text>
           </Pressable>
         </View>
-      )}
+      ) : null}
     </Screen>
   );
 }
@@ -532,4 +563,5 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 20, fontWeight: '900', textAlign: 'center' },
   empty: { textAlign: 'center', fontSize: 14, lineHeight: 21 },
   emptyButton: { marginTop: 10, minHeight: 48, paddingHorizontal: 24, borderRadius: 14, justifyContent: 'center' },
+  loader: { paddingVertical: 64 },
 });

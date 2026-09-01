@@ -4,7 +4,9 @@ import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { BookCover } from '@/components/product/book-cover';
 import { ProgressBar } from '@/components/product/progress-bar';
 import { Screen } from '@/components/product/screen';
+import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Radius, Spacing } from '@/constants/theme';
+import { useFeedback } from '@/features/feedback/feedback-provider';
 import { useGroups } from '@/features/groups/hooks';
 import { useDeleteReadingRun, useProgressEntries, useReadingRuns, useUpdateReadingRun } from '@/features/reading/hooks';
 import { useTheme } from '@/hooks/use-theme';
@@ -37,6 +39,7 @@ function durationLabel(seconds: number) {
 
 export default function BookDetailScreen() {
   const theme = useTheme();
+  const feedback = useFeedback();
   const params = useLocalSearchParams<{ runID: string }>();
   const runID = Array.isArray(params.runID) ? params.runID[0] : params.runID;
   const runs = useReadingRuns();
@@ -49,7 +52,10 @@ export default function BookDetailScreen() {
   const change = (input: Partial<Pick<ReadingRun, 'status' | 'visibility' | 'shareGroupId' | 'progressPrecision' | 'autoShare'>>) => {
     if (!runID) return;
     update.mutate({ readingRunID: runID, input }, {
-      onError: (error) => Alert.alert('책 설정을 바꾸지 못했어요', error.message),
+      onError: (error) => feedback.showError('책 설정을 바꾸지 못했어요', error, {
+        label: '다시 시도',
+        onPress: () => change(input),
+      }),
     });
   };
 
@@ -68,7 +74,7 @@ export default function BookDetailScreen() {
               await remove.mutateAsync(runID);
               router.dismissTo('/library');
             } catch (error) {
-              Alert.alert('책을 제거하지 못했어요', error instanceof Error ? error.message : '잠시 후 다시 시도해 주세요.');
+              feedback.showError('책을 제거하지 못했어요', error, { label: '다시 확인', onPress: confirmRemove });
             }
           },
         },
@@ -79,7 +85,11 @@ export default function BookDetailScreen() {
   if (!run) {
     return (
       <Screen contentContainerStyle={styles.center}>
-        <Text style={[styles.emptyTitle, { color: theme.text }]}>{runs.isFetching ? '책을 불러오는 중…' : '책을 찾을 수 없어요'}</Text>
+        {runs.isError ? (
+          <FeedbackBanner title="책 정보를 불러오지 못했어요" error={runs.error} onAction={() => void runs.refetch()} />
+        ) : (
+          <Text style={[styles.emptyTitle, { color: theme.text }]}>{runs.isFetching ? '책을 불러오는 중…' : '책을 찾을 수 없어요'}</Text>
+        )}
       </Screen>
     );
   }
@@ -89,6 +99,15 @@ export default function BookDetailScreen() {
   return (
     <Screen>
       <Stack.Screen options={{ title: run.title }} />
+      {runs.syncError ? (
+        <FeedbackBanner compact tone="warning" title="저장된 책 정보를 표시하고 있어요" error={runs.syncError} onAction={() => void runs.refetch()} />
+      ) : null}
+      {entries.isError ? (
+        <FeedbackBanner compact title="기록 타임라인을 불러오지 못했어요" error={entries.error} onAction={() => void entries.refetch()} />
+      ) : null}
+      {groups.isError ? (
+        <FeedbackBanner compact title="공유할 그룹을 불러오지 못했어요" error={groups.error} onAction={() => void groups.refetch()} />
+      ) : null}
       <View style={[styles.hero, { backgroundColor: theme.primarySoft, borderColor: theme.border }]}>
         <BookCover title={run.title} color={run.coverColor} />
         <View style={styles.heroCopy}>
@@ -155,7 +174,7 @@ export default function BookDetailScreen() {
             </Text>
           </View>
         ))}
-        {!entries.data?.length && !entries.isFetching ? <Text style={[styles.emptyCopy, { color: theme.textSecondary }]}>아직 남긴 기록이 없어요.</Text> : null}
+        {!entries.data?.length && !entries.isFetching && !entries.isError ? <Text style={[styles.emptyCopy, { color: theme.textSecondary }]}>아직 남긴 기록이 없어요.</Text> : null}
       </View>
 
       <View style={[styles.dangerZone, { borderColor: theme.border }]}>

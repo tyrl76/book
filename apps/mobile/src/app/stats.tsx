@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ProgressBar } from '@/components/product/progress-bar';
 import { Screen } from '@/components/product/screen';
+import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Radius, Spacing } from '@/constants/theme';
 import { useAnnualGoal, useReadingStats } from '@/features/account/hooks';
+import { useFeedback } from '@/features/feedback/feedback-provider';
 import { useTheme } from '@/hooks/use-theme';
 
 function durationLabel(seconds: number) {
@@ -14,6 +16,7 @@ function durationLabel(seconds: number) {
 
 export default function StatsScreen() {
   const theme = useTheme();
+  const feedback = useFeedback();
   const year = new Date().getFullYear();
   const stats = useReadingStats(year);
   const goal = useAnnualGoal(year);
@@ -29,8 +32,9 @@ export default function StatsScreen() {
     try {
       await goal.mutateAsync(targetValue);
       setTarget(null);
+      feedback.showSuccess('올해의 독서 목표를 저장했어요');
     } catch (error) {
-      Alert.alert('목표를 저장하지 못했어요', error instanceof Error ? error.message : '다시 시도해 주세요');
+      feedback.showError('목표를 저장하지 못했어요', error, { label: '다시 시도', onPress: () => void saveGoal() });
     }
   };
 
@@ -41,6 +45,10 @@ export default function StatsScreen() {
         <Text style={[styles.title, { color: theme.text }]}>숫자보다 흐름을 봐요</Text>
         <Text style={[styles.copy, { color: theme.textSecondary }]}>경쟁 순위 없이 나의 독서 리듬만 차분하게 확인합니다.</Text>
       </View>
+
+      {stats.isError ? (
+        <FeedbackBanner title="독서 통계를 불러오지 못했어요" error={stats.error} onAction={() => void stats.refetch()} />
+      ) : null}
 
       <View style={[styles.goalCard, { backgroundColor: theme.primarySoft, borderColor: theme.border }]}>
         <View style={styles.goalTop}>
@@ -60,6 +68,9 @@ export default function StatsScreen() {
             <Text style={[styles.goalUnit, { color: theme.textSecondary }]}>권</Text>
           </View>
         </View>
+        {!targetValid ? (
+          <Text accessibilityLiveRegion="polite" style={[styles.validation, { color: theme.accent }]}>목표는 1권부터 1,000권 사이의 정수로 입력해 주세요.</Text>
+        ) : null}
         <ProgressBar value={goalProgress} />
         <View style={styles.goalBottom}>
           <Text style={[styles.goalMeta, { color: theme.textSecondary }]}>{Math.round(goalProgress)}% 달성</Text>
@@ -120,6 +131,7 @@ const styles = StyleSheet.create({
   goalInput: { width: 70, height: 48, borderWidth: 1, borderRadius: Radius.small, textAlign: 'center', fontSize: 18, fontWeight: '900' },
   goalUnit: { fontSize: 13, fontWeight: '800' },
   goalBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  validation: { fontSize: 12, lineHeight: 17, fontWeight: '700' },
   goalMeta: { fontSize: 11, fontWeight: '800' },
   goalSave: { minHeight: 44, borderRadius: Radius.pill, paddingHorizontal: 15, alignItems: 'center', justifyContent: 'center' },
   goalSaveText: { fontSize: 12, fontWeight: '900' },

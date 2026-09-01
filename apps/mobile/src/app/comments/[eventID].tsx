@@ -3,7 +3,9 @@ import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Screen } from '@/components/product/screen';
+import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Radius, Spacing } from '@/constants/theme';
+import { useFeedback } from '@/features/feedback/feedback-provider';
 import { useCreateFeedComment, useCreateReport, useFeedComments } from '@/features/social/hooks';
 import { useTheme } from '@/hooks/use-theme';
 import type { FeedComment } from '@/types/domain';
@@ -23,6 +25,7 @@ function relativeTime(value: string) {
 
 export default function CommentsScreen() {
   const theme = useTheme();
+  const feedback = useFeedback();
   const params = useLocalSearchParams<{ eventID: string; title?: string }>();
   const eventID = Array.isArray(params.eventID) ? params.eventID[0] : params.eventID;
   const title = Array.isArray(params.title) ? params.title[0] : params.title;
@@ -39,7 +42,7 @@ export default function CommentsScreen() {
       await create.mutateAsync({ body: message, revealPolicy: policy });
       setBody('');
     } catch (error) {
-      Alert.alert('한마디를 남기지 못했어요', error instanceof Error ? error.message : '다시 시도해 주세요');
+      feedback.showError('한마디를 남기지 못했어요', error, { label: '다시 시도', onPress: () => void submit() });
     }
   };
 
@@ -51,6 +54,10 @@ export default function CommentsScreen() {
         <Text style={[styles.title, { color: theme.text }]}>읽은 곳까지만 열리는 대화</Text>
         <Text style={[styles.copy, { color: theme.textSecondary }]}>아직 도달하지 않은 지점의 내용은 자동으로 잠겨요.</Text>
       </View>
+
+      {comments.isError ? (
+        <FeedbackBanner title="독서 대화를 불러오지 못했어요" error={comments.error} onAction={() => void comments.refetch()} />
+      ) : null}
 
       <View style={styles.commentList}>
         {comments.data?.map((comment) => (
@@ -71,7 +78,13 @@ export default function CommentsScreen() {
                   {
                     text: '스포일러 신고',
                     style: 'destructive',
-                    onPress: () => report.mutate({ targetType: 'comment', targetId: comment.id, reason: 'spoiler' }),
+                    onPress: () => report.mutate(
+                      { targetType: 'comment', targetId: comment.id, reason: 'spoiler' },
+                      {
+                        onSuccess: () => feedback.showSuccess('신고를 접수했어요', '확인 후 필요한 조치를 진행합니다.'),
+                        onError: (error) => feedback.showError('신고를 접수하지 못했어요', error),
+                      },
+                    ),
                   },
                 ])}
                 style={styles.reportButton}>
@@ -90,7 +103,7 @@ export default function CommentsScreen() {
             )}
           </View>
         ))}
-        {!comments.isFetching && !comments.data?.length ? (
+        {!comments.isFetching && !comments.data?.length && !comments.isError ? (
           <View style={[styles.empty, { backgroundColor: theme.backgroundElement }]}>
             <Text style={[styles.emptyTitle, { color: theme.text }]}>첫 한마디를 남겨보세요</Text>
             <Text style={[styles.emptyCopy, { color: theme.textSecondary }]}>친구가 읽은 위치에 맞춰 안전하게 열립니다.</Text>

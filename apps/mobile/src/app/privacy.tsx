@@ -1,8 +1,10 @@
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Screen } from '@/components/product/screen';
+import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Radius, Spacing } from '@/constants/theme';
 import { useProfile, useUpdateProfile } from '@/features/account/hooks';
+import { useFeedback } from '@/features/feedback/feedback-provider';
 import { useTheme } from '@/hooks/use-theme';
 import type { Profile } from '@/types/domain';
 
@@ -20,6 +22,7 @@ const precisionOptions: { value: Profile['progressPrecision']; label: string; de
 
 export default function PrivacyScreen() {
   const theme = useTheme();
+  const feedback = useFeedback();
   const profile = useProfile();
   const update = useUpdateProfile();
 
@@ -27,7 +30,7 @@ export default function PrivacyScreen() {
     try {
       await update.mutateAsync(input);
     } catch (error) {
-      Alert.alert('공개 범위를 바꾸지 못했어요', error instanceof Error ? error.message : '다시 시도해 주세요');
+      feedback.showError('공개 범위를 바꾸지 못했어요', error, { label: '다시 시도', onPress: () => void change(input) });
     }
   };
 
@@ -38,6 +41,9 @@ export default function PrivacyScreen() {
         <Text style={[styles.title, { color: theme.text }]}>기록의 주인은 나예요</Text>
         <Text style={[styles.copy, { color: theme.textSecondary }]}>이 설정은 새로 추가하는 책의 기본값입니다. 기존 책은 책 상세에서 따로 바꿀 수 있어요.</Text>
       </View>
+      {profile.isError ? (
+        <FeedbackBanner title="공개 범위를 불러오지 못했어요" error={profile.error} onAction={() => void profile.refetch()} />
+      ) : null}
       <OptionGroup
         title="기본 공개 범위"
         items={visibilityOptions}

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Crypto from 'expo-crypto';
+import { useState } from 'react';
 
 import { useAuth } from '@/features/auth/auth-provider';
 import { deleteReadingRun, fetchProgressEntries, fetchReadingRuns, updateReadingRun } from '@/lib/api';
@@ -14,24 +15,31 @@ import {
   saveReadingRuns,
 } from '@/lib/database';
 import { useAppDatabase } from '@/lib/database-provider';
+import { asError } from '@/lib/error-message';
 import { syncPendingOperations } from '@/lib/sync';
 
 export function useReadingRuns() {
   const db = useAppDatabase();
   const { userID } = useAuth();
-  return useQuery({
+  const [syncError, setSyncError] = useState<Error | null>(null);
+  const query = useQuery({
     queryKey: ['reading-runs', userID],
     enabled: Boolean(userID),
     queryFn: async () => {
       try {
         const remote = await fetchReadingRuns();
         await saveReadingRuns(db, userID!, remote);
+        setSyncError(null);
         return remote;
-      } catch {
-        return loadReadingRuns(db, userID!);
+      } catch (error) {
+        const cached = await loadReadingRuns(db, userID!);
+        if (!cached.length) throw error;
+        setSyncError(asError(error));
+        return cached;
       }
     },
   });
+  return { ...query, syncError };
 }
 
 export function usePendingCount() {

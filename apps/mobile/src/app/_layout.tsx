@@ -4,8 +4,10 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
+import { AppErrorBoundary } from '@/components/ui/app-error-boundary';
 import { Colors } from '@/constants/theme';
 import { AuthProvider, useAuth } from '@/features/auth/auth-provider';
+import { FeedbackProvider } from '@/features/feedback/feedback-provider';
 import { AppThemeProvider, useThemeSelection } from '@/features/theme/theme-provider';
 import { AppDatabaseProvider } from '@/lib/database-provider';
 import { SyncOnResume } from '@/lib/sync-on-resume';
@@ -26,9 +28,13 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <AppThemeProvider>
-      <AppRoot />
-    </AppThemeProvider>
+    <AppErrorBoundary>
+      <AppThemeProvider>
+        <FeedbackProvider>
+          <AppRoot />
+        </FeedbackProvider>
+      </AppThemeProvider>
+    </AppErrorBoundary>
   );
 }
 

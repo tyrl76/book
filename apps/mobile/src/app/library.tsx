@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, 
 import { BookCover } from '@/components/product/book-cover';
 import { ProgressBar } from '@/components/product/progress-bar';
 import { Screen } from '@/components/product/screen';
+import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Radius, Spacing } from '@/constants/theme';
 import { useReadingRuns } from '@/features/reading/hooks';
 import { useTheme } from '@/hooks/use-theme';
@@ -71,6 +72,25 @@ export default function LibraryScreen() {
           <Text style={[styles.headerAddText, { color: theme.inverse }]}>＋ 추가</Text>
         </Pressable>
       </View>
+
+      {runs.syncError ? (
+        <FeedbackBanner
+          compact
+          tone="warning"
+          title="저장된 책장을 표시하고 있어요"
+          error={runs.syncError}
+          actionLabel="다시 연결"
+          onAction={() => void runs.refetch()}
+        />
+      ) : null}
+      {runs.isError ? (
+        <FeedbackBanner
+          title="책장을 불러오지 못했어요"
+          error={runs.error}
+          actionLabel="다시 시도"
+          onAction={() => void runs.refetch()}
+        />
+      ) : null}
 
       <View style={[styles.searchBox, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
         <Text style={[styles.searchIcon, { color: theme.textSecondary }]}>⌕</Text>
@@ -148,7 +168,7 @@ export default function LibraryScreen() {
           </Pressable>
         ))}
         {runs.isFetching && !runs.data ? <ActivityIndicator accessibilityLabel="책장 불러오는 중" color={theme.primary} style={styles.loader} /> : null}
-        {!items.length && !runs.isFetching ? (
+        {!items.length && !runs.isFetching && !runs.isError ? (
           <View style={[styles.empty, { backgroundColor: theme.backgroundElement }]}>
             <Text style={[styles.emptyTitle, { color: theme.text }]}>{query.trim() ? '검색 결과가 없어요' : '이 책장에는 아직 책이 없어요'}</Text>
             <Text style={[styles.emptyCopy, { color: theme.textSecondary }]}>{query.trim() ? '제목이나 저자 검색어를 줄여보세요.' : '읽고 싶은 책을 한 권 추가해 보세요.'}</Text>
