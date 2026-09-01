@@ -473,6 +473,10 @@ paths:
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+        - name: page
+          in: query
+          description: 1부터 시작하는 결과 페이지
+          schema: { type: integer, minimum: 1, maximum: 50, default: 1 }
       responses:
         '200':
           description: 검색 결과
@@ -480,11 +484,14 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [items]
+                required: [items, page, limit, hasNextPage]
                 properties:
                   items:
                     type: array
                     items: { $ref: '#/components/schemas/Book' }
+                  page: { type: integer, minimum: 1 }
+                  limit: { type: integer, minimum: 1, maximum: 50 }
+                  hasNextPage: { type: boolean }
         '400': { $ref: '#/components/responses/Error' }
         '503': { $ref: '#/components/responses/Error' }
 

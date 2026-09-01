@@ -48,6 +48,15 @@ func ensureUser(ctx context.Context, tx pgx.Tx, userID, nickname string) error {
 }
 
 func (s *Store) Search(ctx context.Context, query string, limit int) ([]catalog.Book, error) {
+	result, err := s.SearchPage(ctx, query, 1, limit)
+	return result.Items, err
+}
+
+func (s *Store) SearchPage(ctx context.Context, query string, page, limit int) (catalog.SearchResult, error) {
+	if page < 1 {
+		page = 1
+	}
+	offset := (page - 1) * limit
 	rows, err := s.pool.Query(ctx, `
 		SELECT e.isbn13, w.title, w.author, COALESCE(e.publisher, ''),
 		       COALESCE(e.cover_url, ''), COALESCE(e.page_count, 0)
@@ -56,24 +65,28 @@ func (s *Store) Search(ctx context.Context, query string, limit int) ([]catalog.
 		WHERE e.isbn13 IS NOT NULL
 		  AND (w.title ILIKE '%' || $1 || '%' OR w.author ILIKE '%' || $1 || '%' OR e.isbn13 = $1)
 		ORDER BY CASE WHEN e.isbn13 = $1 THEN 0 ELSE 1 END, w.title
-		LIMIT $2`, query, limit)
+		LIMIT $2 OFFSET $3`, query, limit+1, offset)
 	if err != nil {
-		return nil, fmt.Errorf("search local catalog: %w", err)
+		return catalog.SearchResult{}, fmt.Errorf("search local catalog: %w", err)
 	}
 	defer rows.Close()
 	items := make([]catalog.Book, 0)
 	for rows.Next() {
 		var item catalog.Book
 		if err := rows.Scan(&item.ISBN, &item.Title, &item.Author, &item.Publisher, &item.CoverURL, &item.PageCount); err != nil {
-			return nil, fmt.Errorf("scan local catalog: %w", err)
+			return catalog.SearchResult{}, fmt.Errorf("scan local catalog: %w", err)
 		}
 		item.Source = "local"
 		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate local catalog: %w", err)
+		return catalog.SearchResult{}, fmt.Errorf("iterate local catalog: %w", err)
 	}
-	return items, nil
+	hasNextPage := len(items) > limit
+	if hasNextPage {
+		items = items[:limit]
+	}
+	return catalog.SearchResult{Items: items, HasNextPage: hasNextPage}, nil
 }
 
 func (s *Store) LookupISBN(ctx context.Context, isbn string) (catalog.Book, error) {

@@ -297,10 +297,24 @@ export async function fetchFeed(): Promise<FeedEvent[]> {
   return z.object({ items: z.array(feedEventSchema) }).parse(body).items;
 }
 
-export async function searchBooks(query: string, limit = 20): Promise<Book[]> {
-  const params = new URLSearchParams({ query, limit: String(limit) });
+export type BookSearchPage = {
+  items: Book[];
+  page: number;
+  limit: number;
+  hasNextPage: boolean;
+};
+
+export async function searchBooks(query: string, page = 1, limit = 20): Promise<BookSearchPage> {
+  const params = new URLSearchParams({ query, page: String(page), limit: String(limit) });
   const body = await request(`/v1/catalog/books?${params.toString()}`);
-  return z.object({ items: z.array(bookSchema) }).parse(body).items;
+  return z
+    .object({
+      items: z.array(bookSchema),
+      page: z.number().int().positive(),
+      limit: z.number().int().positive(),
+      hasNextPage: z.boolean(),
+    })
+    .parse(body);
 }
 
 export async function lookupBook(isbn: string): Promise<Book> {

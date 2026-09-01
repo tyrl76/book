@@ -38,7 +38,12 @@ func NewClientForTest(apiKey, endpoint string, httpClient *http.Client) *Client 
 }
 
 func (c *Client) Search(ctx context.Context, query string, limit int) ([]catalog.Book, error) {
-	return c.search(ctx, query, "", limit)
+	result, err := c.SearchPage(ctx, query, 1, limit)
+	return result.Items, err
+}
+
+func (c *Client) SearchPage(ctx context.Context, query string, page, limit int) (catalog.SearchResult, error) {
+	return c.search(ctx, query, "", page, limit)
 }
 
 func (c *Client) LookupISBN(ctx context.Context, isbn string) (catalog.Book, error) {
@@ -46,11 +51,11 @@ func (c *Client) LookupISBN(ctx context.Context, isbn string) (catalog.Book, err
 	if len(normalized) == 10 {
 		normalized = isbn10To13(normalized)
 	}
-	items, err := c.search(ctx, normalized, "isbn", 10)
+	result, err := c.search(ctx, normalized, "isbn", 1, 10)
 	if err != nil {
 		return catalog.Book{}, err
 	}
-	for _, item := range items {
+	for _, item := range result.Items {
 		if item.ISBN == normalized {
 			return item, nil
 		}
@@ -58,9 +63,15 @@ func (c *Client) LookupISBN(ctx context.Context, isbn string) (catalog.Book, err
 	return catalog.Book{}, catalog.ErrNotFound
 }
 
-func (c *Client) search(ctx context.Context, query, target string, limit int) ([]catalog.Book, error) {
+func (c *Client) search(ctx context.Context, query, target string, page, limit int) (catalog.SearchResult, error) {
 	if c.apiKey == "" {
-		return nil, catalog.ErrUnavailable
+		return catalog.SearchResult{}, catalog.ErrUnavailable
+	}
+	if page < 1 {
+		page = 1
+	}
+	if page > 50 {
+		page = 50
 	}
 	if limit < 1 {
 		limit = 10
@@ -71,10 +82,11 @@ func (c *Client) search(ctx context.Context, query, target string, limit int) ([
 
 	endpoint, err := url.Parse(c.endpoint)
 	if err != nil {
-		return nil, fmt.Errorf("parse Kakao endpoint: %w", err)
+		return catalog.SearchResult{}, fmt.Errorf("parse Kakao endpoint: %w", err)
 	}
 	parameters := endpoint.Query()
 	parameters.Set("query", query)
+	parameters.Set("page", fmt.Sprintf("%d", page))
 	parameters.Set("size", fmt.Sprintf("%d", limit))
 	parameters.Set("sort", "accuracy")
 	if target != "" {
@@ -84,24 +96,27 @@ func (c *Client) search(ctx context.Context, query, target string, limit int) ([
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("create Kakao request: %w", err)
+		return catalog.SearchResult{}, fmt.Errorf("create Kakao request: %w", err)
 	}
 	request.Header.Set("Authorization", "KakaoAK "+c.apiKey)
 	request.Header.Set("Accept", "application/json")
 
 	response, err := c.http.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("%w: request Kakao catalog: %v", catalog.ErrUnavailable, err)
+		return catalog.SearchResult{}, fmt.Errorf("%w: request Kakao catalog: %v", catalog.ErrUnavailable, err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode == http.StatusNotFound {
-		return nil, catalog.ErrNotFound
+		return catalog.SearchResult{}, catalog.ErrNotFound
 	}
 	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%w: Kakao catalog returned %d", catalog.ErrUnavailable, response.StatusCode)
+		return catalog.SearchResult{}, fmt.Errorf("%w: Kakao catalog returned %d", catalog.ErrUnavailable, response.StatusCode)
 	}
 
 	var payload struct {
+		Meta struct {
+			IsEnd bool `json:"is_end"`
+		} `json:"meta"`
 		Documents []struct {
 			Title       string   `json:"title"`
 			Contents    string   `json:"contents"`
@@ -116,7 +131,7 @@ func (c *Client) search(ctx context.Context, query, target string, limit int) ([
 	}
 	decoder := json.NewDecoder(io.LimitReader(response.Body, 2<<20))
 	if err := decoder.Decode(&payload); err != nil {
-		return nil, fmt.Errorf("decode Kakao catalog: %w", err)
+		return catalog.SearchResult{}, fmt.Errorf("decode Kakao catalog: %w", err)
 	}
 
 	items := make([]catalog.Book, 0, len(payload.Documents))
@@ -141,7 +156,8 @@ func (c *Client) search(ctx context.Context, query, target string, limit int) ([
 			Source:      "kakao",
 		})
 	}
-	return items, nil
+	hasNextPage := page < 50 && len(payload.Documents) >= limit && !payload.Meta.IsEnd
+	return catalog.SearchResult{Items: items, HasNextPage: hasNextPage}, nil
 }
 
 func isbn13From(raw string) string {
@@ -186,3 +202,4 @@ func cleanText(value string) string {
 }
 
 var _ catalog.Provider = (*Client)(nil)
+var _ catalog.PagedProvider = (*Client)(nil)

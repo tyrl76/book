@@ -28,27 +28,32 @@ func NewPageCountEnrichedProvider(base Provider, pages PageCountProvider) *PageC
 }
 
 func (p *PageCountEnrichedProvider) Search(ctx context.Context, query string, limit int) ([]Book, error) {
-	items, err := p.base.Search(ctx, query, limit)
-	if err != nil || len(items) == 0 {
-		return items, err
+	result, err := p.SearchPage(ctx, query, 1, limit)
+	return result.Items, err
+}
+
+func (p *PageCountEnrichedProvider) SearchPage(ctx context.Context, query string, page, limit int) (SearchResult, error) {
+	result, err := SearchProviderPage(ctx, p.base, query, page, limit)
+	if err != nil || len(result.Items) == 0 {
+		return result, err
 	}
-	for index := range items {
-		p.applyCached(&items[index])
+	for index := range result.Items {
+		p.applyCached(&result.Items[index])
 	}
 	counts, err := p.pages.SearchPageCounts(ctx, query, limit)
 	if err != nil {
-		return items, nil
+		return result, nil
 	}
 	for isbn, pageCount := range counts {
 		if pageCount > 0 {
 			p.cache.Store(isbn, pageCount)
 		}
 	}
-	for index := range items {
-		p.applyCached(&items[index])
+	for index := range result.Items {
+		p.applyCached(&result.Items[index])
 	}
-	p.enrichMissing(ctx, items)
-	return items, nil
+	p.enrichMissing(ctx, result.Items)
+	return result, nil
 }
 
 func (p *PageCountEnrichedProvider) LookupISBN(ctx context.Context, isbn string) (Book, error) {
@@ -136,3 +141,4 @@ func (p *PageCountEnrichedProvider) enrichMissing(ctx context.Context, items []B
 }
 
 var _ Provider = (*PageCountEnrichedProvider)(nil)
+var _ PagedProvider = (*PageCountEnrichedProvider)(nil)

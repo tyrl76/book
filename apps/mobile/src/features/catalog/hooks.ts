@@ -1,12 +1,14 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { createManualReadingRun, createReadingRun, lookupBook, searchBooks } from '@/lib/api';
 
 export function useBookSearch(query: string) {
   const normalized = query.trim();
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ['catalog', 'search', normalized],
-    queryFn: () => searchBooks(normalized),
+    queryFn: ({ pageParam }) => searchBooks(normalized, pageParam, 20),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => (lastPage.hasNextPage ? lastPage.page + 1 : undefined),
     enabled: normalized.length >= 1,
   });
 }

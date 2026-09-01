@@ -42,12 +42,13 @@ Android 다운로드: `https://34-64-97-191.sslip.io/download/`
 
 | ID | 기능 | 사용자 동작·결과 | 화면/API·저장 | 상태 | 제약·예외 |
 |---|---|---|---|---|---|
-| BOOK-001 | 키워드 검색 | 한 글자부터 제목·저자·ISBN으로 도서를 검색하고 표지, 저자, 출판사, ISBN을 확인함 | `book-search` · `GET /v1/catalog/books` · Kakao Books | ✅ 운영 중 | 결과는 기본 20권으로 제한하며 Kakao 장애 시 로컬 카탈로그 폴백을 사용함 |
+| BOOK-001 | 키워드 검색 | 한 글자부터 제목·저자·ISBN으로 도서를 검색하고 표지, 저자, 출판사, ISBN을 확인함 | `book-search` · `GET /v1/catalog/books` · Kakao Books | ✅ 운영 중 | 한 페이지는 20권이며 Kakao 장애 시 로컬 카탈로그 폴백을 사용함 |
 | BOOK-002 | ISBN 조회 | ISBN으로 판본 한 건을 조회해 책장 등록으로 연결함 | `GET /v1/catalog/books/{isbn}` | ✅ 운영 중 | 잘못된 ISBN 또는 미등록 도서는 찾지 못할 수 있음 |
 | BOOK-003 | 바코드 스캔 | 카메라로 ISBN 바코드를 읽어 조회함 | `scan` · Expo Camera | ✅ 운영 중 | 카메라 권한 거절 시 직접 검색·등록으로 안내 |
 | BOOK-004 | 직접 등록 | 검색되지 않는 책의 제목·저자·분량·형식을 직접 입력함 | `manual-book` · `POST /v1/reading-runs/manual` | ✅ 운영 중 | 분량은 쪽·퍼센트·오디오 시간 중 형식에 맞게 입력 |
 | BOOK-005 | 전체 페이지 수 보강 | Kakao 검색 결과의 ISBN을 Google Books와 대조하여 전체 쪽수를 표시함 | Kakao → Google Books `pageCount` 보강 | ✅ 운영 중 | 정확한 ISBN 판본에 값이 있을 때만 표시하며 없으면 생략됨 |
 | BOOK-006 | 페이지 수 수동 보완 | 자동 쪽수가 없거나 판본과 다르면 사용자가 전체 분량을 직접 지정함 | 책 등록 흐름 · `pageCount`/진척 기준 | ✅ 운영 중 | 검색 등록 UI는 1~100,000쪽을 허용하며 판본별 차이는 사용자가 확인 |
+| BOOK-007 | 연관 검색·무한 스크롤 | 입력 중 첫 검색 결과의 관련 도서 제목을 제안하고, 목록 하단에서 다음 20권을 자동 조회함 | `book-search` · `page`/`limit`/`hasNextPage` | ✅ 운영 중 | 중복 ISBN은 제거하며 최대 50페이지까지 탐색 |
 
 ### 2.3 내 책장과 독서 회차
 

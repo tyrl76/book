@@ -39,19 +39,30 @@ func (s *Server) searchCatalogBooks(response http.ResponseWriter, request *http.
 		}
 		limit = parsed
 	}
+	page := 1
+	if raw := request.URL.Query().Get("page"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 || parsed > 50 {
+			writeError(response, http.StatusBadRequest, "invalid_page", "page는 1에서 50 사이여야 합니다")
+			return
+		}
+		page = parsed
+	}
 	if s.catalog == nil {
 		writeError(response, http.StatusServiceUnavailable, "catalog_unavailable", "도서 검색이 설정되지 않았습니다")
 		return
 	}
-	items, err := s.catalog.Search(request.Context(), query, limit)
+	result, err := catalog.SearchProviderPage(request.Context(), s.catalog, query, page, limit)
 	if err != nil {
 		s.catalogError(response, err)
 		return
 	}
-	if items == nil {
-		items = []catalog.Book{}
+	if result.Items == nil {
+		result.Items = []catalog.Book{}
 	}
-	writeJSON(response, http.StatusOK, map[string]any{"items": items})
+	writeJSON(response, http.StatusOK, map[string]any{
+		"items": result.Items, "page": page, "limit": limit, "hasNextPage": result.HasNextPage,
+	})
 }
 
 func (s *Server) lookupBook(response http.ResponseWriter, request *http.Request, _ string) {
