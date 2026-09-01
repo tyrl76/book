@@ -82,7 +82,7 @@
 - `pnpm exec expo export --platform web`로 26개 정적 라우트 생성 성공
 - 오류·복구 UX 변경 후 TypeScript·Expo lint 통과, `/app` 기준 26개 정적 라우트 재생성 성공
 - 운영 로그인 화면에서 잘못된 자격 증명 입력 시 지속형 오류 배너, 정확한 안내 문구, 재시도 버튼 노출 확인
-- 기존 서명 지문을 유지한 Android `versionCode 6` APK와 동일 소스 웹 릴리스 배포, 다운로드·웹·API 상태 HTTP 200 확인
+- 기존 서명 지문을 유지한 Android `versionCode 7` APK와 동일 소스 웹 릴리스 배포, 다운로드·웹·API 상태 HTTP 200 확인
 - `/app/`, `/app/sign-in`, `/app/library`, 해시 정적 자산, 친구·그룹 초대 웹 fallback HTTPS 200 검증
 - 390px 모바일 브라우저에서 가로 넘침과 콘솔 오류 없이 로그인 화면 렌더링 검증
 - 독서 회차 제거 API 단위 테스트와 소유권·연관 기록 정리 PostgreSQL 통합 테스트 추가
@@ -98,5 +98,6 @@
 - Expo 동적 설정에서 iOS Associated Domains와 Android `autoVerify` intent filter 생성 확인
 - 브라우저 1280×720과 390×844에서 가로 오버플로 0, 라이트/다크 선택, 핵심 화면 확인
 - 개인 서버에서 Google Books 키 직접 호출 200, `googleBooksPageCount=true` 확인
+- 한 글자 검색어 `눈`으로 운영 카탈로그 5건 반환, 빈 검색어는 400 `invalid_query`로 차단 확인
 - 제목 `채식주의자` 검색 10건 중 7건, `한강` 검색 10건 중 4건에서 전체 페이지 수 표시 확인
 - ISBN `9788936434595` 정확 조회에서 `pageCount` 반환 및 운영자 도서 검색 화면 표시 확인
