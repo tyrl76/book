@@ -246,6 +246,47 @@ paths:
         '401': { $ref: '#/components/responses/Error' }
         '501': { $ref: '#/components/responses/Error' }
 
+  /v1/admin/local-accounts:
+    get:
+      tags: [Operations]
+      summary: 로그인 가능한 로컬 계정 목록 조회
+      security: [{ adminKeyAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/AdminIDHeader'
+      responses:
+        '200':
+          description: 로컬 계정 목록
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/AdminLocalAccount' }
+        '401': { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Operations]
+      summary: 공개 가입을 열지 않고 테스트용 로컬 계정 생성
+      security: [{ adminKeyAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/AdminIDHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LocalRegistration' }
+      responses:
+        '201':
+          description: 생성된 로컬 계정
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminLocalAccount' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
   /v1/admin/logs:
     get:
       tags: [Operations]
@@ -1043,6 +1084,16 @@ components:
         token: { type: string, writeOnly: true }
         expiresAt: { type: string, format: date-time }
         user: { $ref: '#/components/schemas/LocalAuthUser' }
+
+    AdminLocalAccount:
+      type: object
+      required: [id, email, nickname, activeSessions, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        nickname: { type: string }
+        activeSessions: { type: integer, minimum: 0 }
+        createdAt: { type: string, format: date-time }
 
     StorageStatus:
       type: object

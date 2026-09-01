@@ -59,6 +59,72 @@ func (s *Store) CreateLocalAccount(ctx context.Context, email, nickname, passwor
 	return user, nil
 }
 
+func (s *Store) ListAdminLocalAccounts(ctx context.Context) ([]api.AdminLocalAccount, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT u.id::text, lc.email, p.nickname,
+		       COUNT(session.id) FILTER (WHERE session.revoked_at IS NULL AND session.expires_at > now())::int,
+		       lc.created_at
+		FROM local_credentials lc
+		JOIN users u ON u.id = lc.user_id
+		JOIN profiles p ON p.user_id = u.id
+		LEFT JOIN user_sessions session ON session.user_id = u.id
+		WHERE u.deleted_at IS NULL AND u.deletion_requested_at IS NULL
+		GROUP BY u.id, lc.email, p.nickname, lc.created_at
+		ORDER BY lc.created_at`)
+	if err != nil {
+		return nil, fmt.Errorf("list admin local accounts: %w", err)
+	}
+	defer rows.Close()
+	items := make([]api.AdminLocalAccount, 0)
+	for rows.Next() {
+		var item api.AdminLocalAccount
+		if err := rows.Scan(&item.ID, &item.Email, &item.Nickname, &item.ActiveSessions, &item.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan admin local account: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate admin local accounts: %w", err)
+	}
+	return items, nil
+}
+
+func (s *Store) CreateAdminLocalAccount(ctx context.Context, email, nickname, passwordHash string) (api.AdminLocalAccount, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return api.AdminLocalAccount{}, fmt.Errorf("begin admin local account creation: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, localRegistrationLock); err != nil {
+		return api.AdminLocalAccount{}, fmt.Errorf("lock admin local account creation: %w", err)
+	}
+	var exists bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM local_credentials WHERE lower(email) = lower($1))`, email).Scan(&exists); err != nil {
+		return api.AdminLocalAccount{}, fmt.Errorf("check admin local account email: %w", err)
+	}
+	if exists {
+		return api.AdminLocalAccount{}, api.ErrConflict
+	}
+
+	item := api.AdminLocalAccount{Email: email, Nickname: nickname}
+	if err := tx.QueryRow(ctx, `INSERT INTO users DEFAULT VALUES RETURNING id::text`).Scan(&item.ID); err != nil {
+		return api.AdminLocalAccount{}, fmt.Errorf("create admin local user: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO profiles (user_id, nickname) VALUES ($1::uuid, $2)`, item.ID, nickname); err != nil {
+		return api.AdminLocalAccount{}, fmt.Errorf("create admin local profile: %w", err)
+	}
+	if err := tx.QueryRow(ctx, `
+		INSERT INTO local_credentials (user_id, email, password_hash)
+		VALUES ($1::uuid, $2, $3)
+		RETURNING created_at`, item.ID, email, passwordHash).Scan(&item.CreatedAt); err != nil {
+		return api.AdminLocalAccount{}, fmt.Errorf("create admin local credential: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return api.AdminLocalAccount{}, fmt.Errorf("commit admin local account creation: %w", err)
+	}
+	return item, nil
+}
+
 func (s *Store) GetLocalCredential(ctx context.Context, email string) (api.LocalCredential, error) {
 	var credential api.LocalCredential
 	err := s.pool.QueryRow(ctx, `
@@ -121,3 +187,4 @@ func (s *Store) Verify(ctx context.Context, token string) (string, error) {
 
 var _ api.LocalAuthStore = (*Store)(nil)
 var _ api.TokenVerifier = (*Store)(nil)
+var _ api.AdminLocalAccountStore = (*Store)(nil)

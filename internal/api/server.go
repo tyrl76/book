@@ -222,6 +222,8 @@ func NewServer(store Store, options Options) http.Handler {
 	mux.HandleFunc("GET /admin", server.adminConsole)
 	mux.HandleFunc("GET /admin/books", server.adminBookSearch)
 	mux.HandleFunc("GET /v1/admin/overview", server.rateLimit("admin", 120, time.Minute, server.adminAuth(server.getAdminOverview)))
+	mux.HandleFunc("GET /v1/admin/local-accounts", server.rateLimit("admin", 120, time.Minute, server.adminAuth(server.listAdminLocalAccounts)))
+	mux.HandleFunc("POST /v1/admin/local-accounts", server.rateLimit("admin", 20, time.Minute, server.adminAuth(server.createAdminLocalAccount)))
 	mux.HandleFunc("GET /v1/admin/catalog/books", server.rateLimit("admin", 120, time.Minute, server.adminAuth(server.searchAdminBooks)))
 	mux.HandleFunc("GET /v1/admin/logs", server.rateLimit("admin", 120, time.Minute, server.adminAuth(server.listAdminLogs)))
 	mux.HandleFunc("GET /v1/admin/logs/stream", server.rateLimit("admin", 120, time.Minute, server.adminAuth(server.streamAdminLogs)))

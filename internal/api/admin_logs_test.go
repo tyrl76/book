@@ -7,11 +7,37 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 type fakeAdminOverviewStore struct {
 	fakeStore
 	overview AdminStorageOverview
+}
+
+type fakeAdminLocalAccountStore struct {
+	fakeStore
+	items           []AdminLocalAccount
+	createErr       error
+	createdEmail    string
+	createdNickname string
+	createdHash     string
+}
+
+func (store *fakeAdminLocalAccountStore) ListAdminLocalAccounts(context.Context) ([]AdminLocalAccount, error) {
+	return store.items, nil
+}
+
+func (store *fakeAdminLocalAccountStore) CreateAdminLocalAccount(_ context.Context, email, nickname, passwordHash string) (AdminLocalAccount, error) {
+	store.createdEmail = email
+	store.createdNickname = nickname
+	store.createdHash = passwordHash
+	if store.createErr != nil {
+		return AdminLocalAccount{}, store.createErr
+	}
+	return AdminLocalAccount{ID: "11111111-1111-4111-8111-111111111111", Email: email, Nickname: nickname, CreatedAt: time.Now().UTC()}, nil
 }
 
 func (store *fakeAdminOverviewStore) GetAdminOverview(context.Context) (AdminStorageOverview, error) {
@@ -67,6 +93,59 @@ func TestAdminOverviewAllowsExplicitDevelopmentOpenAccess(t *testing.T) {
 	}
 }
 
+func TestAdminCanCreateAdditionalLocalAccountWithoutOpeningRegistration(t *testing.T) {
+	store := &fakeAdminLocalAccountStore{}
+	handler := NewServer(store, Options{AdminAPIKey: "test-admin-key", LocalAuthEnabled: true})
+
+	unauthorized := httptest.NewRecorder()
+	handler.ServeHTTP(unauthorized, httptest.NewRequest(http.MethodPost, "/v1/admin/local-accounts", strings.NewReader(`{"email":"tester@example.com","nickname":"테스터","password":"correct-horse-42"}`)))
+	if unauthorized.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthorized status = %d", unauthorized.Code)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/v1/admin/local-accounts", strings.NewReader(`{"email":" Tester@Example.com ","nickname":"테스트 독서가","password":"correct-horse-42"}`))
+	request.Header.Set("X-Admin-Key", "test-admin-key")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusCreated {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if store.createdEmail != "tester@example.com" || store.createdNickname != "테스트 독서가" {
+		t.Fatalf("unexpected account = %q, %q", store.createdEmail, store.createdNickname)
+	}
+	if store.createdHash == "correct-horse-42" || bcrypt.CompareHashAndPassword([]byte(store.createdHash), []byte("correct-horse-42")) != nil {
+		t.Fatal("admin-created password was not stored as a bcrypt hash")
+	}
+	if strings.Contains(response.Body.String(), "correct-horse-42") || strings.Contains(response.Body.String(), `"token"`) {
+		t.Fatalf("response leaked credential material: %s", response.Body.String())
+	}
+}
+
+func TestAdminAdditionalLocalAccountRejectsDuplicateEmail(t *testing.T) {
+	store := &fakeAdminLocalAccountStore{createErr: ErrConflict}
+	handler := NewServer(store, Options{AdminOpenAccess: true, LocalAuthEnabled: true})
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/v1/admin/local-accounts", strings.NewReader(`{"email":"tester@example.com","nickname":"테스터","password":"correct-horse-42"}`)))
+
+	if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "email_exists") {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+}
+
+func TestAdminListsLocalAccounts(t *testing.T) {
+	store := &fakeAdminLocalAccountStore{items: []AdminLocalAccount{{
+		ID: "11111111-1111-4111-8111-111111111111", Email: "reader@example.com", Nickname: "독서가", ActiveSessions: 2, CreatedAt: time.Now().UTC(),
+	}}}
+	handler := NewServer(store, Options{AdminOpenAccess: true, LocalAuthEnabled: true})
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/v1/admin/local-accounts", nil))
+
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "reader@example.com") || !strings.Contains(response.Body.String(), `"activeSessions":2`) {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+}
+
 func TestRequestLogCapturesStatusWithoutQuery(t *testing.T) {
 	buffer := NewAdminLogBuffer(10)
 	handler := NewServer(&fakeStore{}, Options{AdminLogBuffer: buffer})
@@ -116,7 +195,7 @@ func TestAdminConsoleIncludesOperationsViews(t *testing.T) {
 	handler := NewServer(&fakeStore{}, Options{})
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/admin", nil))
-	for _, expected := range []string{"운영 현황", "실시간 API 로그", "신고 및 감사 기록", "최초 개인 계정 만들기", "/v1/auth/register", "/admin/books"} {
+	for _, expected := range []string{"운영 현황", "테스트 계정 관리", "새 계정 추가", "/v1/admin/local-accounts", "실시간 API 로그", "신고 및 감사 기록", "최초 개인 계정 만들기", "/v1/auth/register", "/admin/books"} {
 		if !strings.Contains(response.Body.String(), expected) {
 			t.Fatalf("admin console missing %q", expected)
 		}
