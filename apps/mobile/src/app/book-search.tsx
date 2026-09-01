@@ -6,7 +6,7 @@ import { BookAddCard } from '@/components/product/book-add-card';
 import { Screen } from '@/components/product/screen';
 import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { useFeedback } from '@/features/feedback/feedback-provider';
-import { useBookSearch, useCreateReadingRun } from '@/features/catalog/hooks';
+import { useBookSearch, useBookSuggestions, useCreateReadingRun } from '@/features/catalog/hooks';
 import { useTheme } from '@/hooks/use-theme';
 import { ApiError } from '@/lib/api';
 import type { Book, ReadingRun } from '@/types/domain';
@@ -16,14 +16,16 @@ export default function BookSearchScreen() {
   const feedback = useFeedback();
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [submittedQuery, setSubmittedQuery] = useState('');
   const [suggestionsVisible, setSuggestionsVisible] = useState(false);
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query.trim()), 250);
     return () => clearTimeout(timer);
   }, [query]);
-  const search = useBookSearch(debouncedQuery);
+  const suggestionQuery = useBookSuggestions(debouncedQuery);
+  const search = useBookSearch(submittedQuery);
   const create = useCreateReadingRun();
-  const waitingForSearch = query.trim().length >= 1 && query.trim() !== debouncedQuery;
+  const waitingForSuggestions = query.trim().length >= 1 && query.trim() !== debouncedQuery;
   const books = useMemo(() => {
     const unique = new Map<string, Book>();
     for (const page of search.data?.pages ?? []) {
@@ -31,27 +33,16 @@ export default function BookSearchScreen() {
     }
     return [...unique.values()];
   }, [search.data]);
-  const suggestions = useMemo(() => {
-    const unique = new Set<string>();
-    const items: { value: string; author: string }[] = [];
-    for (const book of search.data?.pages[0]?.items ?? []) {
-      const value = book.title.trim();
-      const key = value.toLocaleLowerCase();
-      if (!value || unique.has(key)) continue;
-      unique.add(key);
-      items.push({ value, author: book.author });
-      if (items.length === 6) break;
-    }
-    return items;
-  }, [search.data]);
-  const showSuggestions = suggestionsVisible && query.trim().length >= 1 && query.trim() === debouncedQuery;
+  const showSuggestions = suggestionsVisible && !submittedQuery && query.trim().length >= 1;
   const loadNextPage = () => {
-    if (!waitingForSearch && search.hasNextPage && !search.isFetchingNextPage) void search.fetchNextPage();
+    if (submittedQuery && search.hasNextPage && !search.isFetchingNextPage) void search.fetchNextPage();
   };
-  const selectSuggestion = (value: string) => {
+  const submitSearch = (value: string) => {
     const normalized = value.trim();
+    if (!normalized) return;
     setQuery(normalized);
     setDebouncedQuery(normalized);
+    setSubmittedQuery(normalized);
     setSuggestionsVisible(false);
     Keyboard.dismiss();
   };
@@ -89,13 +80,11 @@ export default function BookSearchScreen() {
           value={query}
           onChangeText={(value) => {
             setQuery(value);
+            setSubmittedQuery('');
             setSuggestionsVisible(value.trim().length >= 1);
           }}
-          onFocus={() => setSuggestionsVisible(query.trim().length >= 1)}
-          onSubmitEditing={() => {
-            setSuggestionsVisible(false);
-            Keyboard.dismiss();
-          }}
+          onFocus={() => setSuggestionsVisible(query.trim().length >= 1 && !submittedQuery)}
+          onSubmitEditing={() => submitSearch(query)}
           maxLength={100}
           placeholder="책 제목, 저자 또는 ISBN"
           placeholderTextColor={theme.textSecondary}
@@ -109,6 +98,7 @@ export default function BookSearchScreen() {
             onPress={() => {
               setQuery('');
               setDebouncedQuery('');
+              setSubmittedQuery('');
               setSuggestionsVisible(false);
             }}>
             <Text style={[styles.clear, { color: theme.textSecondary }]}>×</Text>
@@ -116,24 +106,30 @@ export default function BookSearchScreen() {
         ) : null}
       </View>
 
-      {showSuggestions && suggestions.length ? (
+      {showSuggestions ? (
         <View accessibilityLabel="연관 검색어" style={[styles.suggestions, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Text style={[styles.suggestionHeading, { color: theme.textSecondary }]}>연관 검색어</Text>
-          {suggestions.map((suggestion) => (
-            <Pressable
-              key={suggestion.value}
-              accessibilityRole="button"
-              accessibilityLabel={`${suggestion.value} 검색`}
-              onPress={() => selectSuggestion(suggestion.value)}
-              style={({ pressed }) => [styles.suggestion, { borderTopColor: theme.border, opacity: pressed ? 0.62 : 1 }]}>
-              <Text style={[styles.suggestionIcon, { color: theme.primary }]}>⌕</Text>
-              <View style={styles.suggestionCopy}>
-                <Text numberOfLines={1} style={[styles.suggestionValue, { color: theme.text }]}>{suggestion.value}</Text>
-                {suggestion.author ? <Text numberOfLines={1} style={[styles.suggestionAuthor, { color: theme.textSecondary }]}>{suggestion.author}</Text> : null}
-              </View>
-              <Text style={[styles.suggestionArrow, { color: theme.textSecondary }]}>↗</Text>
+          {waitingForSuggestions || suggestionQuery.isLoading ? (
+            <ActivityIndicator color={theme.primary} style={styles.suggestionLoader} />
+          ) : suggestionQuery.isError ? (
+            <Pressable accessibilityRole="button" onPress={() => void suggestionQuery.refetch()} style={styles.suggestionState}>
+              <Text style={[styles.suggestionStateText, { color: theme.textSecondary }]}>추천 제목을 불러오지 못했어요 · 다시 시도</Text>
             </Pressable>
-          ))}
+          ) : suggestionQuery.data?.length ? (
+            suggestionQuery.data.map((title, index) => (
+              <Pressable
+                key={title}
+                accessibilityRole="button"
+                accessibilityLabel={`${title} 검색`}
+                onPress={() => submitSearch(title)}
+                style={({ pressed }) => [styles.suggestion, { borderTopColor: theme.border, borderTopWidth: index ? StyleSheet.hairlineWidth : 0, opacity: pressed ? 0.62 : 1 }]}>
+                <Text numberOfLines={1} style={[styles.suggestionValue, { color: theme.text }]}>{title}</Text>
+              </Pressable>
+            ))
+          ) : (
+            <View style={styles.suggestionState}>
+              <Text style={[styles.suggestionStateText, { color: theme.textSecondary }]}>추천할 책 제목이 없어요</Text>
+            </View>
+          )}
         </View>
       ) : null}
 
@@ -158,7 +154,7 @@ export default function BookSearchScreen() {
             </Pressable>
           </View>
         </View>
-      ) : waitingForSearch || (search.isLoading && books.length === 0) ? (
+      ) : !submittedQuery ? null : search.isLoading && books.length === 0 ? (
         <ActivityIndicator color={theme.primary} style={styles.loader} />
       ) : search.isError && books.length === 0 ? (
         <FeedbackBanner title="책을 검색하지 못했어요" error={search.error} actionLabel="다시 검색" onAction={() => void search.refetch()} />
@@ -206,13 +202,11 @@ const styles = StyleSheet.create({
   input: { flex: 1, fontSize: 16 },
   clear: { fontSize: 27, paddingHorizontal: 3 },
   suggestions: { marginTop: -18, borderWidth: 1, borderRadius: 16, overflow: 'hidden' },
-  suggestionHeading: { paddingHorizontal: 14, paddingVertical: 10, fontSize: 11, fontWeight: '900', letterSpacing: 0.6 },
-  suggestion: { minHeight: 54, borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  suggestionIcon: { width: 20, fontSize: 18, fontWeight: '900' },
-  suggestionCopy: { flex: 1, gap: 2 },
+  suggestion: { minHeight: 50, paddingHorizontal: 16, justifyContent: 'center' },
   suggestionValue: { fontSize: 14, fontWeight: '800' },
-  suggestionAuthor: { fontSize: 11 },
-  suggestionArrow: { fontSize: 14, fontWeight: '800' },
+  suggestionLoader: { minHeight: 50 },
+  suggestionState: { minHeight: 50, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
+  suggestionStateText: { fontSize: 12, fontWeight: '700', textAlign: 'center' },
   state: { alignItems: 'center', paddingVertical: 64, paddingHorizontal: 24, gap: 9 },
   stateTitle: { fontSize: 20, fontWeight: '900', textAlign: 'center' },
   stateCopy: { fontSize: 14, lineHeight: 21, textAlign: 'center' },

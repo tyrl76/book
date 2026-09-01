@@ -56,6 +56,10 @@ func (p *PageCountEnrichedProvider) SearchPage(ctx context.Context, query string
 	return result, nil
 }
 
+func (p *PageCountEnrichedProvider) Suggest(ctx context.Context, query string, limit int) ([]string, error) {
+	return SuggestProvider(ctx, p.base, query, limit)
+}
+
 func (p *PageCountEnrichedProvider) LookupISBN(ctx context.Context, isbn string) (Book, error) {
 	item, err := p.base.LookupISBN(ctx, isbn)
 	if err != nil || item.PageCount > 0 {
@@ -142,3 +146,4 @@ func (p *PageCountEnrichedProvider) enrichMissing(ctx context.Context, items []B
 
 var _ Provider = (*PageCountEnrichedProvider)(nil)
 var _ PagedProvider = (*PageCountEnrichedProvider)(nil)
+var _ SuggestionProvider = (*PageCountEnrichedProvider)(nil)

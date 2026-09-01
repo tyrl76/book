@@ -48,7 +48,7 @@ Android 다운로드: `https://34-64-97-191.sslip.io/download/`
 | BOOK-004 | 직접 등록 | 검색되지 않는 책의 제목·저자·분량·형식을 직접 입력함 | `manual-book` · `POST /v1/reading-runs/manual` | ✅ 운영 중 | 분량은 쪽·퍼센트·오디오 시간 중 형식에 맞게 입력 |
 | BOOK-005 | 전체 페이지 수 보강 | Kakao 검색 결과의 ISBN을 Google Books와 대조하여 전체 쪽수를 표시함 | Kakao → Google Books `pageCount` 보강 | ✅ 운영 중 | 정확한 ISBN 판본에 값이 있을 때만 표시하며 없으면 생략됨 |
 | BOOK-006 | 페이지 수 수동 보완 | 자동 쪽수가 없거나 판본과 다르면 사용자가 전체 분량을 직접 지정함 | 책 등록 흐름 · `pageCount`/진척 기준 | ✅ 운영 중 | 검색 등록 UI는 1~100,000쪽을 허용하며 판본별 차이는 사용자가 확인 |
-| BOOK-007 | 연관 검색·무한 스크롤 | 입력 중 첫 검색 결과의 관련 도서 제목을 제안하고, 목록 하단에서 다음 20권을 자동 조회함 | `book-search` · `page`/`limit`/`hasNextPage` | ✅ 운영 중 | 중복 ISBN은 제거하며 최대 50페이지까지 탐색 |
+| BOOK-007 | 연관 검색·무한 스크롤 | 입력 중에는 제목만 최대 6개 제안하고, 제목 선택·검색 제출 후 실제 결과를 20권씩 자동 조회함 | `book-search` · `/v1/catalog/book-suggestions` · `page`/`limit`/`hasNextPage` | ✅ 운영 중 | 추천 단계는 페이지 수 보강을 생략하며, 결과는 중복 ISBN을 제거하고 최대 50페이지까지 탐색 |
 
 ### 2.3 내 책장과 독서 회차
 

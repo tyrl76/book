@@ -304,6 +304,12 @@ export type BookSearchPage = {
   hasNextPage: boolean;
 };
 
+export async function suggestBooks(query: string, limit = 6): Promise<string[]> {
+  const params = new URLSearchParams({ query, limit: String(limit) });
+  const body = await request(`/v1/catalog/book-suggestions?${params.toString()}`);
+  return z.object({ items: z.array(z.string().min(1)) }).parse(body).items;
+}
+
 export async function searchBooks(query: string, page = 1, limit = 20): Promise<BookSearchPage> {
   const params = new URLSearchParams({ query, page: String(page), limit: String(limit) });
   const body = await request(`/v1/catalog/books?${params.toString()}`);

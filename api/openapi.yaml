@@ -461,6 +461,33 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/WeeklyReport' }
 
+  /v1/catalog/book-suggestions:
+    get:
+      tags: [Catalog]
+      summary: 입력 중 표시할 도서 제목 추천
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 100 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 10, default: 6 }
+      responses:
+        '200':
+          description: 중복을 제거한 도서 제목 목록
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { type: string }
+        '400': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+
   /v1/catalog/books:
     get:
       tags: [Catalog]

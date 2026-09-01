@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 	"errors"
+	"strings"
 )
 
 var (
@@ -35,6 +36,38 @@ type SearchResult struct {
 
 type PagedProvider interface {
 	SearchPage(context.Context, string, int, int) (SearchResult, error)
+}
+
+type SuggestionProvider interface {
+	Suggest(context.Context, string, int) ([]string, error)
+}
+
+func SuggestProvider(ctx context.Context, provider Provider, query string, limit int) ([]string, error) {
+	if suggestions, ok := provider.(SuggestionProvider); ok {
+		return suggestions.Suggest(ctx, query, limit)
+	}
+	result, err := SearchProviderPage(ctx, provider, query, 1, limit)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]string, 0, len(result.Items))
+	seen := make(map[string]struct{}, len(result.Items))
+	for _, book := range result.Items {
+		title := strings.TrimSpace(book.Title)
+		key := strings.ToLower(title)
+		if title == "" {
+			continue
+		}
+		if _, duplicate := seen[key]; duplicate {
+			continue
+		}
+		seen[key] = struct{}{}
+		items = append(items, title)
+		if len(items) == limit {
+			break
+		}
+	}
+	return items, nil
 }
 
 func SearchProviderPage(ctx context.Context, provider Provider, query string, page, limit int) (SearchResult, error) {
@@ -83,6 +116,14 @@ func (p *LayeredProvider) SearchPage(ctx context.Context, query string, page, li
 		return result, nil
 	}
 	return SearchProviderPage(ctx, p.fallback, query, page, limit)
+}
+
+func (p *LayeredProvider) Suggest(ctx context.Context, query string, limit int) ([]string, error) {
+	items, err := SuggestProvider(ctx, p.primary, query, limit)
+	if err == nil {
+		return items, nil
+	}
+	return SuggestProvider(ctx, p.fallback, query, limit)
 }
 
 func (p *LayeredProvider) LookupISBN(ctx context.Context, isbn string) (Book, error) {

@@ -68,3 +68,24 @@ func TestSearchCatalogBooksRejectsInvalidPage(t *testing.T) {
 		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
 	}
 }
+
+func TestSuggestBooksReturnsTitlesOnly(t *testing.T) {
+	server := &Server{catalog: &pagedCatalogStub{}}
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/v1/catalog/book-suggestions?query=눈&limit=6", nil)
+
+	server.suggestBooks(response, request, "user-id")
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var payload struct {
+		Items []string `json:"items"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(payload.Items) != 1 || payload.Items[0] != "눈" {
+		t.Fatalf("unexpected suggestions: %#v", payload.Items)
+	}
+}

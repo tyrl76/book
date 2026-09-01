@@ -46,6 +46,27 @@ func (c *Client) SearchPage(ctx context.Context, query string, page, limit int) 
 	return c.search(ctx, query, "", page, limit)
 }
 
+func (c *Client) Suggest(ctx context.Context, query string, limit int) ([]string, error) {
+	result, err := c.SearchPage(ctx, query, 1, limit)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]string, 0, len(result.Items))
+	seen := make(map[string]struct{}, len(result.Items))
+	for _, book := range result.Items {
+		key := strings.ToLower(book.Title)
+		if book.Title == "" {
+			continue
+		}
+		if _, duplicate := seen[key]; duplicate {
+			continue
+		}
+		seen[key] = struct{}{}
+		items = append(items, book.Title)
+	}
+	return items, nil
+}
+
 func (c *Client) LookupISBN(ctx context.Context, isbn string) (catalog.Book, error) {
 	normalized := normalizeISBN(isbn)
 	if len(normalized) == 10 {
@@ -203,3 +224,4 @@ func cleanText(value string) string {
 
 var _ catalog.Provider = (*Client)(nil)
 var _ catalog.PagedProvider = (*Client)(nil)
+var _ catalog.SuggestionProvider = (*Client)(nil)

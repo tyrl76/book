@@ -179,6 +179,7 @@ func NewServer(store Store, options Options) http.Handler {
 	mux.HandleFunc("POST /v1/reading-runs", server.auth(server.createReadingRun))
 	mux.HandleFunc("POST /v1/reading-runs/manual", server.auth(server.createManualReadingRun))
 	mux.HandleFunc("GET /v1/feed", server.auth(server.listFeed))
+	mux.HandleFunc("GET /v1/catalog/book-suggestions", server.auth(server.suggestBooks))
 	mux.HandleFunc("GET /v1/catalog/books", server.auth(server.searchBooks))
 	mux.HandleFunc("GET /v1/catalog/books/{isbn}", server.auth(server.lookupBook))
 	mux.HandleFunc("POST /v1/me/bootstrap", server.auth(server.bootstrapUser))

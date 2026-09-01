@@ -1,6 +1,16 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { createManualReadingRun, createReadingRun, lookupBook, searchBooks } from '@/lib/api';
+import { createManualReadingRun, createReadingRun, lookupBook, searchBooks, suggestBooks } from '@/lib/api';
+
+export function useBookSuggestions(query: string) {
+  const normalized = query.trim();
+  return useQuery({
+    queryKey: ['catalog', 'suggestions', normalized],
+    queryFn: () => suggestBooks(normalized),
+    enabled: normalized.length >= 1,
+    staleTime: 60_000,
+  });
+}
 
 export function useBookSearch(query: string) {
   const normalized = query.trim();

@@ -24,6 +24,36 @@ func (s *Server) searchAdminBooks(response http.ResponseWriter, request *http.Re
 	s.searchCatalogBooks(response, request)
 }
 
+func (s *Server) suggestBooks(response http.ResponseWriter, request *http.Request, _ string) {
+	query := strings.TrimSpace(request.URL.Query().Get("query"))
+	if len([]rune(query)) < 1 || len([]rune(query)) > 100 {
+		writeError(response, http.StatusBadRequest, "invalid_query", "검색어는 1자 이상 100자 이하여야 합니다")
+		return
+	}
+	limit := 6
+	if raw := request.URL.Query().Get("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 || parsed > 10 {
+			writeError(response, http.StatusBadRequest, "invalid_limit", "limit은 1에서 10 사이여야 합니다")
+			return
+		}
+		limit = parsed
+	}
+	if s.catalog == nil {
+		writeError(response, http.StatusServiceUnavailable, "catalog_unavailable", "도서 검색이 설정되지 않았습니다")
+		return
+	}
+	items, err := catalog.SuggestProvider(request.Context(), s.catalog, query, limit)
+	if err != nil {
+		s.catalogError(response, err)
+		return
+	}
+	if items == nil {
+		items = []string{}
+	}
+	writeJSON(response, http.StatusOK, map[string]any{"items": items})
+}
+
 func (s *Server) searchCatalogBooks(response http.ResponseWriter, request *http.Request) {
 	query := strings.TrimSpace(request.URL.Query().Get("query"))
 	if len([]rune(query)) < 1 || len([]rune(query)) > 100 {

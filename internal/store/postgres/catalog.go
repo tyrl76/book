@@ -89,6 +89,34 @@ func (s *Store) SearchPage(ctx context.Context, query string, page, limit int) (
 	return catalog.SearchResult{Items: items, HasNextPage: hasNextPage}, nil
 }
 
+func (s *Store) Suggest(ctx context.Context, query string, limit int) ([]string, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT w.title
+		FROM editions e
+		JOIN works w ON w.id = e.work_id
+		WHERE e.isbn13 IS NOT NULL
+		  AND (w.title ILIKE '%' || $1 || '%' OR w.author ILIKE '%' || $1 || '%' OR e.isbn13 = $1)
+		GROUP BY w.title
+		ORDER BY MIN(CASE WHEN e.isbn13 = $1 THEN 0 ELSE 1 END), w.title
+		LIMIT $2`, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("suggest local catalog: %w", err)
+	}
+	defer rows.Close()
+	items := make([]string, 0, limit)
+	for rows.Next() {
+		var title string
+		if err := rows.Scan(&title); err != nil {
+			return nil, fmt.Errorf("scan local catalog suggestion: %w", err)
+		}
+		items = append(items, title)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate local catalog suggestions: %w", err)
+	}
+	return items, nil
+}
+
 func (s *Store) LookupISBN(ctx context.Context, isbn string) (catalog.Book, error) {
 	var item catalog.Book
 	err := s.pool.QueryRow(ctx, `
