@@ -81,6 +81,8 @@
 - `pnpm lint` 통과
 - `pnpm exec expo export --platform web`로 26개 정적 라우트 생성 성공
 - 오류·복구 UX 변경 후 TypeScript·Expo lint 통과, `/app` 기준 26개 정적 라우트 재생성 성공
+- 운영 로그인 화면에서 잘못된 자격 증명 입력 시 지속형 오류 배너, 정확한 안내 문구, 재시도 버튼 노출 확인
+- 기존 서명 지문을 유지한 Android `versionCode 6` APK와 동일 소스 웹 릴리스 배포, 다운로드·웹·API 상태 HTTP 200 확인
 - `/app/`, `/app/sign-in`, `/app/library`, 해시 정적 자산, 친구·그룹 초대 웹 fallback HTTPS 200 검증
 - 390px 모바일 브라우저에서 가로 넘침과 콘솔 오류 없이 로그인 화면 렌더링 검증
 - 독서 회차 제거 API 단위 테스트와 소유권·연관 기록 정리 PostgreSQL 통합 테스트 추가
