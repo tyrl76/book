@@ -38,7 +38,7 @@ func (s *Store) Ping(ctx context.Context) error { return s.pool.Ping(ctx) }
 
 func (s *Store) ListReadingRuns(ctx context.Context, userID string) ([]api.ReadingRun, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT rr.id::text, w.title, w.author, COALESCE(e.cover_url, ''), w.cover_color,
+		SELECT rr.id::text, COALESCE(e.isbn13, ''), w.title, w.author, COALESCE(e.cover_url, ''), w.cover_color,
 		       rr.status, rr.progress_basis, rr.current_value, rr.total_value,
 		       rr.normalized_progress, rr.visibility, COALESCE(rr.share_group_id::text, ''), rr.progress_precision, rr.auto_share,
 		       rr.run_number, rr.started_at, rr.finished_at, rr.updated_at
@@ -55,7 +55,7 @@ func (s *Store) ListReadingRuns(ctx context.Context, userID string) ([]api.Readi
 	items := make([]api.ReadingRun, 0)
 	for rows.Next() {
 		var item api.ReadingRun
-		if err := rows.Scan(&item.ID, &item.Title, &item.Author, &item.CoverURL, &item.CoverColor,
+		if err := rows.Scan(&item.ID, &item.ISBN, &item.Title, &item.Author, &item.CoverURL, &item.CoverColor,
 			&item.Status, &item.ProgressBasis, &item.CurrentValue, &item.TotalValue,
 			&item.NormalizedProgress, &item.Visibility, &item.ShareGroupID, &item.ProgressPrecision, &item.AutoShare,
 			&item.RunNumber, &item.StartedAt, &item.FinishedAt, &item.UpdatedAt); err != nil {

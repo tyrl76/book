@@ -23,6 +23,7 @@ import type {
 
 const readingRunSchema = z.object({
   id: z.string(),
+  isbn: z.string().optional(),
   title: z.string(),
   author: z.string(),
   coverUrl: z.string().optional(),

@@ -1,5 +1,6 @@
 export type ReadingRun = {
   id: string;
+  isbn?: string;
   title: string;
   author: string;
   coverUrl?: string;

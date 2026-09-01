@@ -1077,6 +1077,9 @@ components:
       required: [id, title, author, coverColor, status, progressBasis, currentValue, totalValue, normalizedProgress, visibility, progressPrecision, autoShare, runNumber, updatedAt]
       properties:
         id: { type: string, format: uuid }
+        isbn:
+          type: string
+          description: 카탈로그에서 등록한 판본의 ISBN. 직접 등록한 책은 생략된다.
         title: { type: string }
         author: { type: string }
         coverUrl: { type: string, format: uri }

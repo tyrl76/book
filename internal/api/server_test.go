@@ -24,7 +24,7 @@ type fakeStore struct {
 func (f *fakeStore) Ping(context.Context) error                       { return nil }
 func (f *fakeStore) EnsureUser(context.Context, string, string) error { return nil }
 func (f *fakeStore) ListReadingRuns(context.Context, string) ([]ReadingRun, error) {
-	return []ReadingRun{{ID: "a1111111-1111-4111-8111-111111111111", Title: "아무튼, 메모", Author: "정혜윤"}}, nil
+	return []ReadingRun{{ID: "a1111111-1111-4111-8111-111111111111", ISBN: "9788934998068", Title: "아무튼, 메모", Author: "정혜윤"}}, nil
 }
 func (f *fakeStore) ListFeed(context.Context, string, int) ([]FeedEvent, error) {
 	return []FeedEvent{}, nil
@@ -52,7 +52,7 @@ type captureStore struct{ fakeStore }
 func (f *captureStore) CreateReadingRun(_ context.Context, userID string, command CreateReadingRunCommand) (ReadingRun, error) {
 	f.createdUserID = userID
 	f.created = command
-	return ReadingRun{ID: "b1111111-1111-4111-8111-111111111111", Title: command.Book.Title, TotalValue: command.TotalValue}, nil
+	return ReadingRun{ID: "b1111111-1111-4111-8111-111111111111", ISBN: command.Book.ISBN, Title: command.Book.Title, TotalValue: command.TotalValue}, nil
 }
 
 type fakeAccessStore struct {
@@ -197,6 +197,19 @@ func TestBearerAuthUsesVerifiedSubject(t *testing.T) {
 
 	if response.Code != http.StatusOK || verifier.token != "signed-token" {
 		t.Fatalf("status = %d, token = %q, body = %s", response.Code, verifier.token, response.Body.String())
+	}
+}
+
+func TestListReadingRunsIncludesCatalogISBN(t *testing.T) {
+	handler := NewServer(&fakeStore{}, Options{
+		AllowDevAuth: true,
+		DevUserID:    "11111111-1111-4111-8111-111111111111",
+	})
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/v1/reading-runs", nil))
+
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"isbn":"9788934998068"`) {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
 	}
 }
 

@@ -185,7 +185,7 @@ func (s *Store) CreateReadingRun(ctx context.Context, userID string, command api
 	var activeID string
 	err = tx.QueryRow(ctx, `
 		SELECT id::text FROM reading_runs
-		WHERE user_id = $1::uuid AND edition_id = $2::uuid AND status IN ('reading', 'paused')
+		WHERE user_id = $1::uuid AND edition_id = $2::uuid AND status IN ('want_to_read', 'reading', 'paused')
 		LIMIT 1`, userID, editionID).Scan(&activeID)
 	if err == nil {
 		return api.ReadingRun{}, api.ErrConflict
@@ -228,7 +228,7 @@ func (s *Store) CreateReadingRun(ctx context.Context, userID string, command api
 		return api.ReadingRun{}, fmt.Errorf("load reading defaults: %w", err)
 	}
 	result := api.ReadingRun{
-		Title: command.Book.Title, Author: command.Book.Author, CoverURL: command.Book.CoverURL,
+		ISBN: command.Book.ISBN, Title: command.Book.Title, Author: command.Book.Author, CoverURL: command.Book.CoverURL,
 		CoverColor: coverColor(command.Book.ISBN), Status: status, ProgressBasis: basis,
 		CurrentValue: 0, TotalValue: totalValue, NormalizedProgress: 0,
 		Visibility: defaultVisibility, ProgressPrecision: defaultPrecision, AutoShare: true,

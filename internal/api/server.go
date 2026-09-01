@@ -27,6 +27,7 @@ var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-
 
 type ReadingRun struct {
 	ID                 string     `json:"id"`
+	ISBN               string     `json:"isbn,omitempty"`
 	Title              string     `json:"title"`
 	Author             string     `json:"author"`
 	CoverURL           string     `json:"coverUrl,omitempty"`

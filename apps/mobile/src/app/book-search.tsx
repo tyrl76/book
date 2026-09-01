@@ -8,6 +8,7 @@ import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { useAuth } from '@/features/auth/auth-provider';
 import { useFeedback } from '@/features/feedback/feedback-provider';
 import { useBookSearch, useBookSuggestions, useCreateReadingRun } from '@/features/catalog/hooks';
+import { useReadingRuns, useUpdateReadingRun } from '@/features/reading/hooks';
 import { useTheme } from '@/hooks/use-theme';
 import { ApiError } from '@/lib/api';
 import { addRecentSearch, clearRecentSearches, loadRecentSearches, removeRecentSearch } from '@/lib/recent-searches';
@@ -29,6 +30,8 @@ export default function BookSearchScreen() {
   const suggestionQuery = useBookSuggestions(debouncedQuery);
   const search = useBookSearch(submittedQuery);
   const create = useCreateReadingRun();
+  const runs = useReadingRuns();
+  const update = useUpdateReadingRun();
   const waitingForSuggestions = query.trim().length >= 1 && query.trim() !== debouncedQuery;
   const books = useMemo(() => {
     const unique = new Map<string, Book>();
@@ -37,6 +40,15 @@ export default function BookSearchScreen() {
     }
     return [...unique.values()];
   }, [search.data]);
+  const existingRunsByISBN = useMemo(() => {
+    const items = new Map<string, ReadingRun>();
+    for (const run of runs.data ?? []) {
+      if (run.isbn && (run.status === 'want_to_read' || run.status === 'reading' || run.status === 'paused') && !items.has(run.isbn)) {
+        items.set(run.isbn, run);
+      }
+    }
+    return items;
+  }, [runs.data]);
   const showSuggestions = suggestionsVisible && !submittedQuery && query.trim().length >= 1;
   const loadNextPage = () => {
     if (submittedQuery && search.hasNextPage && !search.isFetchingNextPage) void search.fetchNextPage();
@@ -52,6 +64,20 @@ export default function BookSearchScreen() {
     Keyboard.dismiss();
   };
   const openManualRegistration = () => router.push({ pathname: '/manual-book', params: { title: query.trim() } });
+
+  const continueExisting = async (run: ReadingRun) => {
+    try {
+      if (run.status !== 'reading') {
+        await update.mutateAsync({ readingRunID: run.id, input: { status: 'reading' } });
+      }
+      router.dismissTo({ pathname: '/record', params: { runID: run.id } });
+    } catch (error) {
+      feedback.showError('읽기를 시작하지 못했어요', error, {
+        label: '다시 시도',
+        onPress: () => void continueExisting(run),
+      });
+    }
+  };
 
   const add = async (
     isbn: string,
@@ -214,7 +240,19 @@ export default function BookSearchScreen() {
             <BookAddCard
               key={book.isbn}
               book={book}
-              pending={create.isPending && create.variables?.isbn === book.isbn}
+              existingRun={existingRunsByISBN.get(book.isbn)}
+              pending={
+                (create.isPending && create.variables?.isbn === book.isbn) ||
+                (update.isPending && update.variables?.readingRunID === existingRunsByISBN.get(book.isbn)?.id)
+              }
+              onOpenExisting={() => {
+                const run = existingRunsByISBN.get(book.isbn);
+                if (run) router.push({ pathname: '/book/[runID]', params: { runID: run.id } });
+              }}
+              onContinueExisting={() => {
+                const run = existingRunsByISBN.get(book.isbn);
+                if (run) void continueExisting(run);
+              }}
               onAdd={(totalValue, progressBasis, status) => add(book.isbn, totalValue, progressBasis, status)}
             />
           ))}

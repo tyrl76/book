@@ -1,10 +1,11 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
 import { BookCover } from '@/components/product/book-cover';
 import { ProgressBar } from '@/components/product/progress-bar';
 import { Screen } from '@/components/product/screen';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Radius, Spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/auth-provider';
@@ -26,6 +27,10 @@ type StoredReadingTimer = {
   startedAt: number | null;
   accumulatedSeconds: number;
 };
+
+type RecordConfirmation =
+  | { type: 'reset_timer' }
+  | { type: 'switch_run'; nextRunID: string };
 
 function formatTimer(seconds: number) {
   const hours = Math.floor(seconds / 3600);
@@ -63,6 +68,8 @@ function restoreReadingTimer(userID: string | null): StoredReadingTimer | null {
 export default function RecordScreen() {
   const theme = useTheme();
   const feedback = useFeedback();
+  const params = useLocalSearchParams<{ runID?: string }>();
+  const requestedRunID = Array.isArray(params.runID) ? params.runID[0] : params.runID;
   const { width } = useWindowDimensions();
   const compact = width < 520;
   const { userID } = useAuth();
@@ -74,7 +81,7 @@ export default function RecordScreen() {
   const record = useRecordProgress();
   const [restoredTimer] = useState<StoredReadingTimer | null>(() => restoreReadingTimer(userID));
   const activeRuns = (runs.data ?? []).filter((run) => run.status === 'reading' || run.status === 'paused');
-  const [selectedRunID, setSelectedRunID] = useState<string | null>(restoredTimer?.readingRunID ?? null);
+  const [selectedRunID, setSelectedRunID] = useState<string | null>(restoredTimer?.readingRunID ?? requestedRunID ?? null);
   const currentRun = activeRuns.find((run) => run.id === selectedRunID) ?? activeRuns[0];
   const [draftValue, setDraftValue] = useState<string | null>(null);
   const [note, setNote] = useState('');
@@ -82,6 +89,7 @@ export default function RecordScreen() {
   const [timerStartedAt, setTimerStartedAt] = useState<number | null>(restoredTimer?.startedAt ?? null);
   const [timerAccumulated, setTimerAccumulated] = useState(restoredTimer?.accumulatedSeconds ?? 0);
   const [timerNow, setTimerNow] = useState(() => Date.now());
+  const [confirmation, setConfirmation] = useState<RecordConfirmation | null>(null);
   const timerAppliesToCurrentRun = Boolean(currentRun && currentRun.id === timerRunID);
   const activeTimerStartedAt = timerAppliesToCurrentRun ? timerStartedAt : null;
   const activeTimerAccumulated = timerAppliesToCurrentRun ? timerAccumulated : 0;
@@ -145,9 +153,26 @@ export default function RecordScreen() {
   const draftPercent = currentRun && Number.isFinite(numericValue) && currentRun.totalValue > 0
     ? Math.round((numericValue / currentRun.totalValue) * 100)
     : 0;
+  const hasMeaningfulEntry = Boolean(
+    currentRun && (
+      numericValue !== currentRun.currentValue ||
+      note.trim().length > 0 ||
+      elapsedSeconds > 0
+    ),
+  );
+  const canSave = isValid && hasMeaningfulEntry;
+  const sharingCopy = !currentRun?.autoShare
+    ? '자동 공유 꺼짐 · 이 메모는 내 기록에만 저장돼요'
+    : currentRun.visibility === 'private'
+      ? '나만 공개 · 이 메모는 내 기록에만 저장돼요'
+      : currentRun.visibility === 'group'
+        ? '선택한 독서 모임 공개 · 마일스톤을 넘을 때 공유돼요'
+        : currentRun.visibility === 'public'
+          ? '책결 전체 공개 · 마일스톤을 넘을 때 공유돼요'
+          : '친구 공개 · 마일스톤을 넘을 때 공유돼요';
 
   const save = async () => {
-    if (!currentRun || !isValid) return;
+    if (!currentRun || !canSave) return;
     try {
       const summary = await record.mutateAsync({
         readingRunId: currentRun.id,
@@ -185,46 +210,37 @@ export default function RecordScreen() {
 
   const confirmTimerReset = () => {
     if (!currentRun || elapsedSeconds === 0) return;
-    Alert.alert('타이머를 초기화할까요?', '측정한 독서 시간만 0으로 돌아가며 진척값과 메모는 유지됩니다.', [
-      { text: '취소', style: 'cancel' },
-      {
-        text: '초기화',
-        style: 'destructive',
-        onPress: () => {
-          setTimerRunID(null);
-          setTimerStartedAt(null);
-          setTimerAccumulated(0);
-          presence.mutate({ readingRunID: currentRun.id, active: false });
-        },
-      },
-    ]);
+    setConfirmation({ type: 'reset_timer' });
+  };
+
+  const resetTimer = () => {
+    if (currentRun) presence.mutate({ readingRunID: currentRun.id, active: false });
+    setTimerRunID(null);
+    setTimerStartedAt(null);
+    setTimerAccumulated(0);
+    setConfirmation(null);
+  };
+
+  const applyRunSelection = (nextRunID: string) => {
+    if (currentRun && elapsedSeconds > 0) {
+      presence.mutate({ readingRunID: currentRun.id, active: false });
+      setTimerRunID(null);
+      setTimerStartedAt(null);
+      setTimerAccumulated(0);
+    }
+    setSelectedRunID(nextRunID);
+    setDraftValue(null);
+    setNote('');
+    setConfirmation(null);
   };
 
   const selectRun = (nextRunID: string) => {
     if (nextRunID === currentRun?.id) return;
-    const applySelection = () => {
-      if (currentRun && elapsedSeconds > 0) {
-        setTimerRunID(null);
-        setTimerStartedAt(null);
-        setTimerAccumulated(0);
-        presence.mutate({ readingRunID: currentRun.id, active: false });
-      }
-      setSelectedRunID(nextRunID);
-      setDraftValue(null);
-      setNote('');
-    };
     if (elapsedSeconds === 0) {
-      applySelection();
+      applyRunSelection(nextRunID);
       return;
     }
-    Alert.alert(
-      '타이머를 초기화하고 책을 바꿀까요?',
-      '현재 측정한 독서 시간은 아직 기록되지 않았어요. 취소하면 이 책에서 계속 기록할 수 있습니다.',
-      [
-        { text: '취소', style: 'cancel' },
-        { text: '초기화하고 전환', style: 'destructive', onPress: applySelection },
-      ],
-    );
+    setConfirmation({ type: 'switch_run', nextRunID });
   };
 
   return (
@@ -329,7 +345,9 @@ export default function RecordScreen() {
               <View style={styles.bookInfo}>
                 <View style={styles.readingLabelRow}>
                   <View style={[styles.readingDot, { backgroundColor: theme.accent }]} />
-                  <Text style={[styles.readingLabel, { color: theme.primary }]}>읽는 중</Text>
+                  <Text style={[styles.readingLabel, { color: theme.primary }]}>
+                    {currentRun.status === 'paused' ? '잠시 멈춤' : '읽는 중'}
+                  </Text>
                 </View>
                 <Text numberOfLines={2} style={[styles.bookTitle, { color: theme.text }]}>{currentRun.title}</Text>
                 <Text style={[styles.author, { color: theme.textSecondary }]}>{currentRun.author}</Text>
@@ -465,19 +483,25 @@ export default function RecordScreen() {
               placeholderTextColor={theme.textSecondary}
               style={[styles.noteInput, { color: theme.text, backgroundColor: theme.backgroundElement, borderColor: theme.border }]}
             />
-            <Text style={[styles.privacy, { color: theme.textSecondary }]}>친구 공개 · 마일스톤을 넘을 때만 공유돼요</Text>
+            <Text style={[styles.privacy, { color: theme.textSecondary }]}>{sharingCopy}</Text>
           </View>
+
+          {isValid && !hasMeaningfulEntry ? (
+            <Text accessibilityLiveRegion="polite" style={[styles.saveHint, { color: theme.textSecondary }]}>
+              진척을 바꾸거나 메모 또는 독서 시간을 남기면 저장할 수 있어요.
+            </Text>
+          ) : null}
 
           <Pressable
             accessibilityRole="button"
-            accessibilityState={{ disabled: !isValid || record.isPending }}
-            disabled={!isValid || record.isPending}
+            accessibilityState={{ disabled: !canSave || record.isPending }}
+            disabled={!canSave || record.isPending}
             onPress={save}
             style={({ pressed }) => [
               styles.saveButton,
-              { backgroundColor: isValid ? theme.primary : theme.backgroundElement, opacity: pressed ? 0.76 : 1 },
+              { backgroundColor: canSave ? theme.primary : theme.backgroundElement, opacity: pressed ? 0.76 : 1 },
             ]}>
-            <Text style={[styles.saveText, { color: isValid ? theme.inverse : theme.textSecondary }]}>
+            <Text style={[styles.saveText, { color: canSave ? theme.inverse : theme.textSecondary }]}>
               {record.isPending ? '저장 중…' : '오늘의 기록 저장'}
             </Text>
           </Pressable>
@@ -496,6 +520,21 @@ export default function RecordScreen() {
           </Pressable>
         </View>
       ) : null}
+      <ConfirmDialog
+        visible={Boolean(confirmation)}
+        title={confirmation?.type === 'switch_run' ? '타이머를 초기화하고 책을 바꿀까요?' : '타이머를 초기화할까요?'}
+        message={
+          confirmation?.type === 'switch_run'
+            ? '현재 측정한 독서 시간은 아직 기록되지 않았어요. 취소하면 이 책에서 계속 기록할 수 있습니다.'
+            : '측정한 독서 시간만 0으로 돌아가며 진척값과 메모는 유지됩니다.'
+        }
+        confirmLabel={confirmation?.type === 'switch_run' ? '초기화하고 전환' : '초기화'}
+        onCancel={() => setConfirmation(null)}
+        onConfirm={() => {
+          if (confirmation?.type === 'switch_run') applyRunSelection(confirmation.nextRunID);
+          else resetTimer();
+        }}
+      />
     </Screen>
   );
 }
@@ -557,6 +596,7 @@ const styles = StyleSheet.create({
   quickText: { fontSize: 12, fontWeight: '800' },
   noteInput: { minHeight: 102, borderWidth: 1, borderRadius: 16, padding: 14, textAlignVertical: 'top', fontSize: 15, lineHeight: 22 },
   privacy: { fontSize: 12, lineHeight: 17 },
+  saveHint: { marginTop: -4, fontSize: 11, lineHeight: 17, textAlign: 'center' },
   saveButton: { height: 56, borderRadius: 17, alignItems: 'center', justifyContent: 'center', margin: 6 },
   saveText: { fontSize: 15, fontWeight: '900' },
   emptyWrap: { alignItems: 'center', borderWidth: 1, borderRadius: Radius.large, paddingVertical: 60, paddingHorizontal: Spacing.four, gap: 9 },

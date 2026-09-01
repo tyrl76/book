@@ -13,6 +13,9 @@ type Props = {
   book: Book;
   pending?: boolean;
   compact?: boolean;
+  existingRun?: ReadingRun;
+  onOpenExisting?: () => void;
+  onContinueExisting?: () => void;
   onAdd: (totalValue: number, progressBasis: ReadingRun['progressBasis'], status: AddStatus) => void;
 };
 
@@ -22,7 +25,21 @@ const basisOptions: { value: ReadingRun['progressBasis']; label: string }[] = [
   { value: 'audio_seconds', label: '오디오북' },
 ];
 
-export function BookAddCard({ book, pending = false, compact = false, onAdd }: Props) {
+const existingStatusCopy: Partial<Record<ReadingRun['status'], { label: string; action: string }>> = {
+  want_to_read: { label: '읽고 싶음에 담긴 책', action: '읽기 시작' },
+  reading: { label: '현재 읽는 중', action: '기록하기' },
+  paused: { label: '잠시 멈춘 책', action: '계속 읽기' },
+};
+
+export function BookAddCard({
+  book,
+  pending = false,
+  compact = false,
+  existingRun,
+  onOpenExisting,
+  onContinueExisting,
+  onAdd,
+}: Props) {
   const theme = useTheme();
   const [basis, setBasis] = useState<ReadingRun['progressBasis']>(book.pageCount ? 'pages' : 'percent');
   const [amount, setAmount] = useState(book.pageCount ? String(book.pageCount) : '100');
@@ -31,6 +48,7 @@ export function BookAddCard({ book, pending = false, compact = false, onAdd }: P
   const amountValid = !requiresAmount || (Number.isInteger(numericAmount) && numericAmount > 0 && numericAmount <= (basis === 'pages' ? 100_000 : 16_666));
   const totalValue = basis === 'percent' ? 100 : basis === 'audio_seconds' ? numericAmount * 60 : numericAmount;
   const unit = basis === 'pages' ? '쪽' : basis === 'audio_seconds' ? '분' : '%';
+  const existingCopy = existingRun ? existingStatusCopy[existingRun.status] : undefined;
 
   const selectBasis = (next: ReadingRun['progressBasis']) => {
     setBasis(next);
@@ -55,6 +73,39 @@ export function BookAddCard({ book, pending = false, compact = false, onAdd }: P
           </Text>
         </View>
       </View>
+
+      {existingRun && existingCopy ? (
+        <View style={[styles.existingPanel, { backgroundColor: theme.primarySoft, borderColor: theme.primary }]}>
+          <View style={styles.existingCopy}>
+            <Text style={[styles.existingEyebrow, { color: theme.primary }]}>내 책장에 있어요</Text>
+            <Text style={[styles.existingLabel, { color: theme.text }]}>{existingCopy.label}</Text>
+          </View>
+          <View style={styles.existingActions}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${book.title} 책장 상세 보기`}
+              onPress={onOpenExisting}
+              style={[styles.existingSecondary, { borderColor: theme.border, backgroundColor: theme.card }]}>
+              <Text style={[styles.existingSecondaryText, { color: theme.textSecondary }]}>상세 보기</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${book.title} ${existingCopy.action}`}
+              accessibilityState={{ disabled: pending }}
+              disabled={pending}
+              onPress={onContinueExisting}
+              style={({ pressed }) => [
+                styles.existingPrimary,
+                { backgroundColor: theme.primary, opacity: pressed || pending ? 0.58 : 1 },
+              ]}>
+              <Text style={[styles.existingPrimaryText, { color: theme.inverse }]}>
+                {pending ? '처리 중…' : existingCopy.action}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : (
+        <>
 
       <View accessibilityRole="radiogroup" style={styles.basisRow}>
         {basisOptions.map((item) => {
@@ -120,6 +171,8 @@ export function BookAddCard({ book, pending = false, compact = false, onAdd }: P
           </Text>
         </Pressable>
       </View>
+        </>
+      )}
     </View>
   );
 }
@@ -132,6 +185,15 @@ const styles = StyleSheet.create({
   info: { flex: 1, justifyContent: 'center', gap: 5 },
   title: { fontSize: 17, lineHeight: 23, fontWeight: '900', letterSpacing: -0.3 },
   meta: { fontSize: 12, lineHeight: 17 },
+  existingPanel: { borderWidth: 1, borderRadius: 15, padding: 13, gap: 12 },
+  existingCopy: { gap: 3 },
+  existingEyebrow: { fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
+  existingLabel: { fontSize: 14, fontWeight: '900' },
+  existingActions: { flexDirection: 'row', gap: 8 },
+  existingSecondary: { flex: 1, minHeight: 44, borderWidth: 1, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  existingPrimary: { flex: 1, minHeight: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  existingSecondaryText: { fontSize: 12, fontWeight: '900' },
+  existingPrimaryText: { fontSize: 12, fontWeight: '900' },
   basisRow: { flexDirection: 'row', gap: 7 },
   basis: { flex: 1, minHeight: 42, borderWidth: 1, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center' },
   basisText: { fontSize: 11, fontWeight: '900' },

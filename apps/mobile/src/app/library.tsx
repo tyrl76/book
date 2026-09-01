@@ -9,7 +9,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Radius, Spacing } from '@/constants/theme';
 import { useFeedback } from '@/features/feedback/feedback-provider';
-import { useDeleteReadingRun, useReadingRuns } from '@/features/reading/hooks';
+import { useDeleteReadingRun, useReadingRuns, useUpdateReadingRun } from '@/features/reading/hooks';
 import { useTheme } from '@/hooks/use-theme';
 import type { ReadingRun } from '@/types/domain';
 
@@ -49,6 +49,7 @@ export default function LibraryScreen() {
   const [deleteTarget, setDeleteTarget] = useState<ReadingRun | null>(null);
   const runs = useReadingRuns();
   const remove = useDeleteReadingRun();
+  const update = useUpdateReadingRun();
   const items = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase('ko-KR');
     return (runs.data ?? [])
@@ -73,6 +74,20 @@ export default function LibraryScreen() {
       feedback.showError('책을 삭제하지 못했어요', error, {
         label: '다시 시도',
         onPress: () => setDeleteTarget(target),
+      });
+    }
+  };
+
+  const openRecord = async (run: ReadingRun) => {
+    try {
+      if (run.status === 'want_to_read' || run.status === 'paused') {
+        await update.mutateAsync({ readingRunID: run.id, input: { status: 'reading' } });
+      }
+      router.push({ pathname: '/record', params: { runID: run.id } });
+    } catch (error) {
+      feedback.showError('읽기를 시작하지 못했어요', error, {
+        label: '다시 시도',
+        onPress: () => void openRecord(run),
       });
     }
   };
@@ -187,17 +202,41 @@ export default function LibraryScreen() {
               </View>
               <Text style={[styles.chevron, { color: theme.textSecondary }]}>›</Text>
             </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`${run.title} 책장에서 삭제`}
-              disabled={remove.isPending}
-              onPress={() => setDeleteTarget(run)}
-              style={({ pressed }) => [
-                styles.cardDelete,
-                { backgroundColor: theme.backgroundElement, opacity: pressed || remove.isPending ? 0.55 : 1 },
-              ]}>
-              <Text style={[styles.cardDeleteText, { color: theme.accent }]}>삭제</Text>
-            </Pressable>
+            <View style={styles.cardActions}>
+              {run.status === 'want_to_read' || run.status === 'reading' || run.status === 'paused' ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${run.title} ${run.status === 'want_to_read' ? '읽기 시작' : run.status === 'paused' ? '계속 읽기' : '기록하기'}`}
+                  accessibilityState={{ disabled: update.isPending && update.variables?.readingRunID === run.id }}
+                  disabled={update.isPending && update.variables?.readingRunID === run.id}
+                  onPress={() => void openRecord(run)}
+                  style={({ pressed }) => [
+                    styles.cardQuickAction,
+                    { backgroundColor: theme.primarySoft, opacity: pressed ? 0.58 : 1 },
+                  ]}>
+                  <Text style={[styles.cardQuickActionText, { color: theme.primary }]}>
+                    {update.isPending && update.variables?.readingRunID === run.id
+                      ? '처리 중'
+                      : run.status === 'want_to_read'
+                        ? '시작'
+                        : run.status === 'paused'
+                          ? '계속'
+                          : '기록'}
+                  </Text>
+                </Pressable>
+              ) : null}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${run.title} 책장에서 삭제`}
+                disabled={remove.isPending}
+                onPress={() => setDeleteTarget(run)}
+                style={({ pressed }) => [
+                  styles.cardDelete,
+                  { backgroundColor: theme.backgroundElement, opacity: pressed || remove.isPending ? 0.55 : 1 },
+                ]}>
+                <Text style={[styles.cardDeleteText, { color: theme.accent }]}>삭제</Text>
+              </Pressable>
+            </View>
           </View>
         ))}
         {runs.isFetching && !runs.data ? <ActivityIndicator accessibilityLabel="책장 불러오는 중" color={theme.primary} style={styles.loader} /> : null}
@@ -258,6 +297,9 @@ const styles = StyleSheet.create({
   author: { fontSize: 12 },
   progress: { fontSize: 10, fontWeight: '700' },
   chevron: { fontSize: 25 },
+  cardActions: { gap: 7 },
+  cardQuickAction: { minWidth: 48, minHeight: 44, borderRadius: Radius.small, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 9 },
+  cardQuickActionText: { fontSize: 11, fontWeight: '900' },
   cardDelete: { minWidth: 48, minHeight: 44, borderRadius: Radius.small, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 9 },
   cardDeleteText: { fontSize: 11, fontWeight: '900' },
   empty: { borderRadius: Radius.large, padding: Spacing.five, alignItems: 'center', gap: 14 },
