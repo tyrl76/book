@@ -137,7 +137,7 @@ func (s *Server) createReadingRun(response http.ResponseWriter, request *http.Re
 	}
 	if !isbnPattern.MatchString(payload.ISBN) || payload.TotalValue < 0 || payload.TotalValue > 1_000_000 || payload.TotalValue != math.Trunc(payload.TotalValue) ||
 		(payload.ProgressBasis != "pages" && payload.ProgressBasis != "percent" && payload.ProgressBasis != "audio_seconds") ||
-		(payload.Status != "reading" && payload.Status != "want_to_read") ||
+		(payload.Status != "reading" && payload.Status != "want_to_read" && payload.Status != "finished") ||
 		(payload.ProgressBasis == "audio_seconds" && payload.TotalValue <= 0) {
 		writeError(response, http.StatusBadRequest, "invalid_book", "ISBN 또는 전체 분량을 확인해 주세요")
 		return
@@ -156,7 +156,7 @@ func (s *Server) createReadingRun(response http.ResponseWriter, request *http.Re
 	})
 	if err != nil {
 		if errors.Is(err, ErrConflict) {
-			writeError(response, http.StatusConflict, "reading_run_exists", "이미 읽는 중인 책입니다")
+			writeError(response, http.StatusConflict, "reading_run_exists", "이미 책장에 등록된 책입니다")
 			return
 		}
 		s.internalError(response, err)
@@ -205,7 +205,7 @@ func (s *Server) createManualReadingRun(response http.ResponseWriter, request *h
 	}
 	if len([]rune(payload.Title)) < 1 || len([]rune(payload.Title)) > 200 || len([]rune(payload.Author)) > 120 ||
 		(payload.ProgressBasis != "pages" && payload.ProgressBasis != "percent" && payload.ProgressBasis != "audio_seconds") ||
-		(payload.Status != "reading" && payload.Status != "want_to_read") || payload.TotalValue <= 0 || payload.TotalValue > 1_000_000 || payload.TotalValue != math.Trunc(payload.TotalValue) {
+		(payload.Status != "reading" && payload.Status != "want_to_read" && payload.Status != "finished") || payload.TotalValue <= 0 || payload.TotalValue > 1_000_000 || payload.TotalValue != math.Trunc(payload.TotalValue) {
 		writeError(response, http.StatusBadRequest, "invalid_book", "제목과 전체 분량을 확인해 주세요")
 		return
 	}

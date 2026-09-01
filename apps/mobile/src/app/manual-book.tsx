@@ -25,7 +25,7 @@ export default function ManualBookScreen() {
   const [author, setAuthor] = useState('');
   const [basis, setBasis] = useState<ReadingRun['progressBasis']>('pages');
   const [amount, setAmount] = useState('');
-  const [status, setStatus] = useState<Extract<ReadingRun['status'], 'reading' | 'want_to_read'>>('reading');
+  const [status, setStatus] = useState<Extract<ReadingRun['status'], 'reading' | 'want_to_read' | 'finished'>>('reading');
   const numericAmount = Number(amount);
   const totalValue = basis === 'percent' ? 100 : basis === 'audio_seconds' ? numericAmount * 60 : numericAmount;
   const amountValid = basis === 'percent' || (Number.isInteger(numericAmount) && numericAmount > 0 && totalValue <= 1_000_000);
@@ -36,10 +36,12 @@ export default function ManualBookScreen() {
     if (!valid) return;
     try {
       await create.mutateAsync({ title: title.trim(), author: author.trim(), totalValue, progressBasis: basis, status });
+      const isReading = status === 'reading';
+      const isImported = status === 'finished';
       feedback.showSuccess(
-        status === 'reading' ? '읽는 책에 추가했어요' : '읽고 싶은 책에 담았어요',
-        undefined,
-        { label: status === 'reading' ? '기록하기' : '책장 보기', onPress: () => router.dismissTo(status === 'reading' ? '/record' : '/library') },
+        isReading ? '읽는 책에 추가했어요' : isImported ? '읽은 책으로 등록했어요' : '읽고 싶은 책에 담았어요',
+        isImported ? '과거 독서 이력으로 저장해 오늘 통계와 피드에는 포함하지 않았어요.' : undefined,
+        { label: isReading ? '기록하기' : '책장 보기', onPress: () => router.dismissTo(isReading ? '/record' : '/library') },
       );
     } catch (error) {
       feedback.showError('책을 등록하지 못했어요', error, { label: '다시 시도', onPress: () => void save() });
@@ -100,6 +102,7 @@ export default function ManualBookScreen() {
             {([
               { value: 'reading' as const, label: '지금 읽기' },
               { value: 'want_to_read' as const, label: '읽고 싶음' },
+              { value: 'finished' as const, label: '이미 읽었어요' },
             ]).map((item) => {
               const selected = status === item.value;
               return (
@@ -109,6 +112,9 @@ export default function ManualBookScreen() {
               );
             })}
           </View>
+          {status === 'finished' ? (
+            <Text style={[styles.statusHint, { color: theme.textSecondary }]}>과거 독서로 등록되며 오늘의 독서량·연속 기록·피드에는 포함되지 않아요.</Text>
+          ) : null}
         </View>
       </View>
 
@@ -141,6 +147,7 @@ const styles = StyleSheet.create({
   options: { flexDirection: 'row', gap: 7 },
   option: { flex: 1, minHeight: 46, borderWidth: 1, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center' },
   optionText: { fontSize: 12, fontWeight: '900' },
+  statusHint: { fontSize: 11, lineHeight: 17 },
   amountWrap: { minHeight: 54, borderWidth: 1, borderRadius: Radius.medium, flexDirection: 'row', alignItems: 'center' },
   amountInput: { flex: 1, paddingHorizontal: 14, fontSize: 17, fontWeight: '900' },
   unit: { paddingRight: 14, fontSize: 13, fontWeight: '800' },

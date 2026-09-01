@@ -117,6 +117,7 @@ const progressEntrySchema = z.object({
   previousValue: z.number(),
   newValue: z.number(),
   normalizedProgress: z.number().int(),
+  source: z.enum(['timer', 'manual', 'import']),
   note: z.string().optional(),
   durationSeconds: z.number().int().nonnegative(),
   correction: z.boolean(),
@@ -333,7 +334,7 @@ export async function createReadingRun(input: {
   isbn: string;
   totalValue: number;
   progressBasis: ReadingRun['progressBasis'];
-  status: Extract<ReadingRun['status'], 'reading' | 'want_to_read'>;
+  status: Extract<ReadingRun['status'], 'reading' | 'want_to_read' | 'finished'>;
 }): Promise<ReadingRun> {
   const body = await request('/v1/reading-runs', {
     method: 'POST',
@@ -347,7 +348,7 @@ export async function createManualReadingRun(input: {
   author: string;
   totalValue: number;
   progressBasis: ReadingRun['progressBasis'];
-  status: Extract<ReadingRun['status'], 'reading' | 'want_to_read'>;
+  status: Extract<ReadingRun['status'], 'reading' | 'want_to_read' | 'finished'>;
 }): Promise<ReadingRun> {
   const body = await request('/v1/reading-runs/manual', {
     method: 'POST',

@@ -166,7 +166,7 @@ export default function BookDetailScreen() {
             </View>
             {entry.note ? <Text style={[styles.entryNote, { color: theme.text }]}>{entry.note}</Text> : null}
             <Text style={[styles.entryMeta, { color: theme.textSecondary }]}>
-              {entry.correction ? '수정 기록' : '독서 기록'}{entry.durationSeconds > 0 ? ` · ${durationLabel(entry.durationSeconds)}` : ''}
+              {entry.source === 'import' ? '앱 사용 전 독서 이력' : entry.correction ? '수정 기록' : '독서 기록'}{entry.durationSeconds > 0 ? ` · ${durationLabel(entry.durationSeconds)}` : ''}
             </Text>
           </View>
         ))}

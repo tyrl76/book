@@ -252,6 +252,27 @@ func TestCreateReadingRunUsesCatalogBook(t *testing.T) {
 	}
 }
 
+func TestCreateReadingRunAcceptsPreviouslyFinishedBook(t *testing.T) {
+	store := &captureStore{}
+	store.lookup = catalog.Book{ISBN: "9788936434267", Title: "소년이 온다", Author: "한강", Source: "test"}
+	handler := NewServer(store, Options{
+		AllowDevAuth: true,
+		DevUserID:    "11111111-1111-4111-8111-111111111111",
+		Catalog:      store,
+	})
+	request := httptest.NewRequest(http.MethodPost, "/v1/reading-runs", strings.NewReader(`{"isbn":"9788936434267","totalValue":216,"status":"finished"}`))
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusCreated {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if store.created.Status != "finished" {
+		t.Fatalf("status = %q, want finished", store.created.Status)
+	}
+}
+
 func TestDeleteReadingRunChecksOwnershipAndReturnsNoContent(t *testing.T) {
 	store := &fakeAccountStore{}
 	handler := NewServer(store, Options{AllowDevAuth: true, DevUserID: "11111111-1111-4111-8111-111111111111"})

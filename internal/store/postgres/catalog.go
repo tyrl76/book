@@ -222,6 +222,14 @@ func (s *Store) CreateReadingRun(ctx context.Context, userID string, command api
 	if status == "reading" {
 		startedAt = &now
 	}
+	currentValue := float64(0)
+	normalizedProgress := 0
+	entrySource := "manual"
+	if status == "finished" {
+		currentValue = totalValue
+		normalizedProgress = 10000
+		entrySource = "import"
+	}
 	var defaultVisibility, defaultPrecision string
 	if err := tx.QueryRow(ctx, `SELECT default_visibility, progress_precision FROM profiles WHERE user_id = $1::uuid`, userID).
 		Scan(&defaultVisibility, &defaultPrecision); err != nil {
@@ -230,7 +238,7 @@ func (s *Store) CreateReadingRun(ctx context.Context, userID string, command api
 	result := api.ReadingRun{
 		ISBN: command.Book.ISBN, Title: command.Book.Title, Author: command.Book.Author, CoverURL: command.Book.CoverURL,
 		CoverColor: coverColor(command.Book.ISBN), Status: status, ProgressBasis: basis,
-		CurrentValue: 0, TotalValue: totalValue, NormalizedProgress: 0,
+		CurrentValue: currentValue, TotalValue: totalValue, NormalizedProgress: normalizedProgress,
 		Visibility: defaultVisibility, ProgressPrecision: defaultPrecision, AutoShare: true,
 		RunNumber: runNumber, StartedAt: startedAt, UpdatedAt: now,
 	}
@@ -238,8 +246,9 @@ func (s *Store) CreateReadingRun(ctx context.Context, userID string, command api
 		INSERT INTO reading_runs (
 			user_id, edition_id, status, progress_basis, current_value, total_value,
 			normalized_progress, visibility, progress_precision, auto_share, run_number, started_at, updated_at
-		) VALUES ($1::uuid, $2::uuid, $3, $4, 0, $5, 0, $6, $7, true, $8, $9, $10)
-		RETURNING id::text`, userID, editionID, status, basis, totalValue, defaultVisibility, defaultPrecision, runNumber, startedAt, now).Scan(&result.ID); err != nil {
+		) VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9, true, $10, $11, $12)
+		RETURNING id::text`, userID, editionID, status, basis, currentValue, totalValue, normalizedProgress,
+		defaultVisibility, defaultPrecision, runNumber, startedAt, now).Scan(&result.ID); err != nil {
 		return api.ReadingRun{}, fmt.Errorf("insert reading run: %w", err)
 	}
 
@@ -248,8 +257,8 @@ func (s *Store) CreateReadingRun(ctx context.Context, userID string, command api
 		INSERT INTO progress_entries (
 			reading_run_id, client_operation_id, previous_value, new_value,
 			previous_normalized_progress, new_normalized_progress, source, recorded_at
-		) VALUES ($1::uuid, gen_random_uuid(), 0, 0, 0, 0, 'manual', $2)
-		RETURNING id::text`, result.ID, now).Scan(&entryID); err != nil {
+		) VALUES ($1::uuid, gen_random_uuid(), $2, $2, $3, $3, $4, $5)
+		RETURNING id::text`, result.ID, currentValue, normalizedProgress, entrySource, now).Scan(&entryID); err != nil {
 		return api.ReadingRun{}, fmt.Errorf("insert starting progress: %w", err)
 	}
 	if status == "reading" && defaultVisibility != "private" {
@@ -323,19 +332,28 @@ func (s *Store) CreateManualReadingRun(ctx context.Context, userID string, comma
 	if command.Status == "reading" {
 		startedAt = &now
 	}
+	currentValue := float64(0)
+	normalizedProgress := 0
+	entrySource := "manual"
+	if command.Status == "finished" {
+		currentValue = command.TotalValue
+		normalizedProgress = 10000
+		entrySource = "import"
+	}
 	result := api.ReadingRun{
 		Title: command.Title, Author: command.Author, CoverColor: color, Status: command.Status,
-		ProgressBasis: command.ProgressBasis, TotalValue: command.TotalValue,
-		Visibility: defaultVisibility, ProgressPrecision: defaultPrecision, AutoShare: true,
+		ProgressBasis: command.ProgressBasis, CurrentValue: currentValue, TotalValue: command.TotalValue,
+		NormalizedProgress: normalizedProgress,
+		Visibility:         defaultVisibility, ProgressPrecision: defaultPrecision, AutoShare: true,
 		RunNumber: 1, StartedAt: startedAt, UpdatedAt: now,
 	}
 	if err := tx.QueryRow(ctx, `
 		INSERT INTO reading_runs (
-			user_id, edition_id, status, progress_basis, total_value, visibility,
+			user_id, edition_id, status, progress_basis, current_value, total_value, normalized_progress, visibility,
 			progress_precision, auto_share, run_number, started_at, updated_at
-		) VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, true, 1, $8, $9)
-		RETURNING id::text`, userID, editionID, command.Status, command.ProgressBasis, command.TotalValue,
-		defaultVisibility, defaultPrecision, startedAt, now).Scan(&result.ID); err != nil {
+		) VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9, true, 1, $10, $11)
+		RETURNING id::text`, userID, editionID, command.Status, command.ProgressBasis, currentValue,
+		command.TotalValue, normalizedProgress, defaultVisibility, defaultPrecision, startedAt, now).Scan(&result.ID); err != nil {
 		return api.ReadingRun{}, fmt.Errorf("insert manual reading run: %w", err)
 	}
 	var entryID string
@@ -343,8 +361,8 @@ func (s *Store) CreateManualReadingRun(ctx context.Context, userID string, comma
 		INSERT INTO progress_entries (
 			reading_run_id, client_operation_id, previous_value, new_value,
 			previous_normalized_progress, new_normalized_progress, source, recorded_at
-		) VALUES ($1::uuid, gen_random_uuid(), 0, 0, 0, 0, 'manual', $2)
-		RETURNING id::text`, result.ID, now).Scan(&entryID); err != nil {
+		) VALUES ($1::uuid, gen_random_uuid(), $2, $2, $3, $3, $4, $5)
+		RETURNING id::text`, result.ID, currentValue, normalizedProgress, entrySource, now).Scan(&entryID); err != nil {
 		return api.ReadingRun{}, fmt.Errorf("insert manual starting progress: %w", err)
 	}
 	if command.Status == "reading" && defaultVisibility != "private" {

@@ -1111,7 +1111,8 @@ components:
         progressBasis: { $ref: '#/components/schemas/ProgressBasis' }
         status:
           type: string
-          enum: [reading, want_to_read]
+          enum: [reading, want_to_read, finished]
+          description: finished는 앱 사용 전에 읽은 책을 피드·당일 통계 없이 가져올 때 사용한다.
 
     CreateManualReadingRun:
       type: object
@@ -1123,7 +1124,8 @@ components:
         progressBasis: { $ref: '#/components/schemas/ProgressBasis' }
         status:
           type: string
-          enum: [reading, want_to_read]
+          enum: [reading, want_to_read, finished]
+          description: finished는 앱 사용 전에 읽은 책을 피드·당일 통계 없이 가져올 때 사용한다.
 
     UpdateReadingRun:
       type: object
@@ -1166,12 +1168,15 @@ components:
 
     ProgressEntry:
       type: object
-      required: [id, previousValue, newValue, normalizedProgress, durationSeconds, correction, recordedAt]
+      required: [id, previousValue, newValue, normalizedProgress, source, durationSeconds, correction, recordedAt]
       properties:
         id: { type: string, format: uuid }
         previousValue: { type: number }
         newValue: { type: number }
         normalizedProgress: { type: integer, minimum: 0, maximum: 10000 }
+        source:
+          type: string
+          enum: [timer, manual, import]
         note: { type: string }
         durationSeconds: { type: integer, minimum: 0 }
         correction: { type: boolean }

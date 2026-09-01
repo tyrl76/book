@@ -7,7 +7,7 @@ import { Radius } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { Book, ReadingRun } from '@/types/domain';
 
-type AddStatus = Extract<ReadingRun['status'], 'reading' | 'want_to_read'>;
+type AddStatus = Extract<ReadingRun['status'], 'reading' | 'want_to_read' | 'finished'>;
 
 type Props = {
   book: Book;
@@ -171,6 +171,19 @@ export function BookAddCard({
           </Text>
         </Pressable>
       </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${book.title} 이미 읽은 책으로 등록`}
+        accessibilityState={{ disabled: pending || !amountValid }}
+        disabled={pending || !amountValid}
+        onPress={() => onAdd(totalValue, basis, 'finished')}
+        style={({ pressed }) => [
+          styles.importButton,
+          { borderColor: theme.border, opacity: pressed || pending ? 0.58 : 1 },
+        ]}>
+        <Text style={[styles.importButtonText, { color: theme.text }]}>이미 읽었어요</Text>
+        <Text style={[styles.importHint, { color: theme.textSecondary }]}>과거 독서로 등록 · 오늘 통계와 피드에는 미포함</Text>
+      </Pressable>
         </>
       )}
     </View>
@@ -205,6 +218,9 @@ const styles = StyleSheet.create({
   primaryButton: { flex: 1, minHeight: 48, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   secondaryButtonText: { fontSize: 12, fontWeight: '900' },
   primaryButtonText: { fontSize: 12, fontWeight: '900' },
+  importButton: { minHeight: 52, borderWidth: 1, borderRadius: 13, alignItems: 'center', justifyContent: 'center', gap: 2 },
+  importButtonText: { fontSize: 12, fontWeight: '900' },
+  importHint: { fontSize: 10, lineHeight: 14 },
   error: { fontSize: 11, lineHeight: 16, fontWeight: '700' },
   hint: { fontSize: 11, lineHeight: 16 },
 });

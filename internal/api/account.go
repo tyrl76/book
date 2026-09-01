@@ -32,6 +32,7 @@ type ProgressEntry struct {
 	PreviousValue      float64   `json:"previousValue"`
 	NewValue           float64   `json:"newValue"`
 	NormalizedProgress int       `json:"normalizedProgress"`
+	Source             string    `json:"source"`
 	Note               string    `json:"note,omitempty"`
 	DurationSeconds    int       `json:"durationSeconds"`
 	Correction         bool      `json:"correction"`

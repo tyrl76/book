@@ -94,6 +94,7 @@ export type ProgressEntry = {
   previousValue: number;
   newValue: number;
   normalizedProgress: number;
+  source: 'timer' | 'manual' | 'import';
   note?: string;
   durationSeconds: number;
   correction: boolean;

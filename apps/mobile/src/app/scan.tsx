@@ -32,17 +32,20 @@ export default function ScanScreen() {
   const add = async (
     totalValue: number,
     progressBasis: ReadingRun['progressBasis'],
-    status: Extract<ReadingRun['status'], 'reading' | 'want_to_read'>,
+    status: Extract<ReadingRun['status'], 'reading' | 'want_to_read' | 'finished'>,
   ) => {
     if (!isbn) return;
     try {
       await create.mutateAsync({ isbn, totalValue, progressBasis, status });
-      feedback.showSuccess(status === 'reading' ? '읽는 책에 추가했어요' : '읽고 싶은 책에 담았어요', undefined, {
-        label: status === 'reading' ? '기록하기' : '책장 보기',
-        onPress: () => router.dismissTo(status === 'reading' ? '/record' : '/library'),
+      const isReading = status === 'reading';
+      const isImported = status === 'finished';
+      feedback.showSuccess(isReading ? '읽는 책에 추가했어요' : isImported ? '읽은 책으로 등록했어요' : '읽고 싶은 책에 담았어요',
+        isImported ? '과거 독서 이력으로 저장해 오늘 통계와 피드에는 포함하지 않았어요.' : undefined, {
+        label: isReading ? '기록하기' : '책장 보기',
+        onPress: () => router.dismissTo(isReading ? '/record' : '/library'),
       });
     } catch (error) {
-      const message = error instanceof ApiError && error.status === 409 ? '이미 읽는 중인 책입니다.' : error instanceof Error ? error.message : '책을 추가하지 못했습니다.';
+      const message = error instanceof ApiError && error.status === 409 ? '이미 책장에 등록된 책입니다.' : error instanceof Error ? error.message : '책을 추가하지 못했습니다.';
       feedback.showError('책을 추가하지 못했어요', new Error(message), {
         label: '다시 시도',
         onPress: () => void add(totalValue, progressBasis, status),

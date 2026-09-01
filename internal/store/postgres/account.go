@@ -147,7 +147,7 @@ func (s *Store) ListProgressEntries(ctx context.Context, userID, runID string) (
 	}
 	rows, err := s.pool.Query(ctx, `
 		SELECT id::text, previous_value, new_value, new_normalized_progress,
-		       COALESCE(note, ''), duration_seconds, is_correction, recorded_at
+		       source, COALESCE(note, ''), duration_seconds, is_correction, recorded_at
 		FROM progress_entries WHERE reading_run_id = $1::uuid
 		ORDER BY recorded_at DESC, id DESC`, runID)
 	if err != nil {
@@ -158,7 +158,7 @@ func (s *Store) ListProgressEntries(ctx context.Context, userID, runID string) (
 	for rows.Next() {
 		var item api.ProgressEntry
 		if err := rows.Scan(&item.ID, &item.PreviousValue, &item.NewValue, &item.NormalizedProgress,
-			&item.Note, &item.DurationSeconds, &item.Correction, &item.RecordedAt); err != nil {
+			&item.Source, &item.Note, &item.DurationSeconds, &item.Correction, &item.RecordedAt); err != nil {
 			return nil, fmt.Errorf("scan progress entry: %w", err)
 		}
 		items = append(items, item)
@@ -185,6 +185,7 @@ func (s *Store) GetReadingStats(ctx context.Context, userID string, year int) (a
 		       COALESCE(SUM(pe.duration_seconds), 0)::int
 		FROM progress_entries pe JOIN reading_runs rr ON rr.id = pe.reading_run_id
 		WHERE rr.user_id = $1::uuid
+		  AND pe.source <> 'import'
 		  AND EXTRACT(YEAR FROM pe.recorded_at AT TIME ZONE 'Asia/Seoul') = $2`, userID, year).
 		Scan(&item.PagesRead, &item.DurationSeconds); err != nil {
 		return api.ReadingStats{}, fmt.Errorf("sum reading stats: %w", err)
@@ -199,6 +200,7 @@ func (s *Store) GetReadingStats(ctx context.Context, userID string, year int) (a
 		       COUNT(*)::int
 		FROM progress_entries pe JOIN reading_runs rr ON rr.id = pe.reading_run_id
 		WHERE rr.user_id = $1::uuid
+		  AND pe.source <> 'import'
 		  AND EXTRACT(YEAR FROM pe.recorded_at AT TIME ZONE 'Asia/Seoul') = $2
 		GROUP BY 1 ORDER BY 1`, userID, year)
 	if err != nil {
