@@ -99,6 +99,7 @@ function AppStack() {
                 options={{ presentation: 'modal', title: 'ISBN 바코드 스캔' }}
               />
               <Stack.Screen name="friends" options={{ title: '친구와 그룹' }} />
+              <Stack.Screen name="friend/[userID]" options={{ title: '친구 독서 프로필' }} />
               <Stack.Screen name="invite/[token]" options={{ title: '친구 초대' }} />
               <Stack.Screen name="comments/[eventID]" options={{ title: '독서 대화' }} />
               <Stack.Screen name="library" options={{ title: '내 책장' }} />

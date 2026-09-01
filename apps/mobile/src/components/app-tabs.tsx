@@ -21,6 +21,11 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Icon sf="book.pages.fill" md="auto_stories" />
       </NativeTabs.Trigger>
 
+      <NativeTabs.Trigger name="people">
+        <NativeTabs.Trigger.Label>친구</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="person.2.circle.fill" md="group" />
+      </NativeTabs.Trigger>
+
       <NativeTabs.Trigger name="me">
         <NativeTabs.Trigger.Label>나</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="person.crop.circle.fill" md="person" />

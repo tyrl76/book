@@ -13,17 +13,35 @@ import (
 func (s *Store) ListFriends(ctx context.Context, userID string) ([]api.Friend, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT p.user_id::text, p.nickname, COALESCE(p.avatar_url, ''), p.bio,
-		       COALESCE(current_read.title, ''), COALESCE(current_read.normalized_progress, -1),
+		       COALESCE(current_read.title, ''), COALESCE(current_read.visible_progress, -1),
 		       EXISTS(SELECT 1 FROM reading_presence rp WHERE rp.user_id = p.user_id AND rp.expires_at > now())
 		FROM friendships f
 		JOIN profiles p ON p.user_id = CASE WHEN f.user_low = $1::uuid THEN f.user_high ELSE f.user_low END
 		JOIN users friend_user ON friend_user.id = p.user_id AND friend_user.deletion_requested_at IS NULL
 		LEFT JOIN LATERAL (
-			SELECT w.title, rr.normalized_progress
+			SELECT w.title,
+			       CASE rr.progress_precision
+			           WHEN 'hidden' THEN -1
+			           WHEN 'milestone' THEN (rr.normalized_progress / 2500) * 2500
+			           ELSE rr.normalized_progress
+			       END AS visible_progress
 			FROM reading_runs rr
 			JOIN editions e ON e.id = rr.edition_id
 			JOIN works w ON w.id = e.work_id
-			WHERE rr.user_id = p.user_id AND rr.status = 'reading'
+			WHERE rr.user_id = p.user_id
+			  AND rr.status = 'reading'
+			  AND (
+			      rr.visibility IN ('friends', 'public')
+			      OR (
+			          rr.visibility = 'group'
+			          AND rr.share_group_id IS NOT NULL
+			          AND EXISTS (
+			              SELECT 1 FROM group_members viewer_membership
+			              WHERE viewer_membership.group_id = rr.share_group_id
+			                AND viewer_membership.user_id = $1::uuid
+			          )
+			      )
+			  )
 			ORDER BY rr.updated_at DESC
 			LIMIT 1
 		) current_read ON true

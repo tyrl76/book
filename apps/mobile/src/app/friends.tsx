@@ -1,5 +1,5 @@
 import * as Clipboard from 'expo-clipboard';
-import { router } from 'expo-router';
+import { router, usePathname } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -24,6 +24,7 @@ function inviteToken(value: string) {
 
 export default function FriendsScreen() {
   const theme = useTheme();
+  const pathname = usePathname();
   const feedback = useFeedback();
   const friends = useFriends();
   const createInvite = useCreateFriendInvite();
@@ -32,6 +33,8 @@ export default function FriendsScreen() {
   const block = useBlockUser();
   const [inviteInput, setInviteInput] = useState('');
   const [activeInvite, setActiveInvite] = useState<FriendInvite | null>(null);
+  const isTabRoute = pathname === '/people';
+  const liveFriendCount = (friends.data ?? []).filter((friend) => friend.readingNow).length;
 
   const getInvite = async (fresh = false) => {
     if (activeInvite && !fresh) return activeInvite;
@@ -102,12 +105,73 @@ export default function FriendsScreen() {
     <Screen>
       <View style={styles.heading}>
         <Text style={[styles.eyebrow, { color: theme.primary }]}>READING TOGETHER</Text>
-        <Text style={[styles.title, { color: theme.text }]}>친구와 연결하기</Text>
-        <Text style={[styles.copy, { color: theme.textSecondary }]}>연락처를 올리지 않고 초대 링크나 코드로만 연결해요.</Text>
+        <Text style={[styles.title, { color: theme.text }]}>내 독서 친구</Text>
+        <Text style={[styles.copy, { color: theme.textSecondary }]}>친구의 현재 책과 공개한 독서 흐름을 한곳에서 확인해요.</Text>
+      </View>
+
+      <View style={[styles.overview, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <View style={styles.overviewItem}>
+          <Text style={[styles.overviewValue, { color: theme.text }]}>{friends.data?.length ?? 0}</Text>
+          <Text style={[styles.overviewLabel, { color: theme.textSecondary }]}>연결된 친구</Text>
+        </View>
+        <View style={[styles.overviewDivider, { backgroundColor: theme.border }]} />
+        <View style={styles.overviewItem}>
+          <Text style={[styles.overviewValue, { color: liveFriendCount ? theme.accent : theme.text }]}>{liveFriendCount}</Text>
+          <Text style={[styles.overviewLabel, { color: theme.textSecondary }]}>지금 읽는 중</Text>
+        </View>
+      </View>
+
+      {friends.isError ? (
+        <FeedbackBanner title="친구 목록을 불러오지 못했어요" error={friends.error} onAction={() => void friends.refetch()} />
+      ) : null}
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeading}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>연결된 친구</Text>
+          <Text style={[styles.sectionMeta, { color: theme.textSecondary }]}>친구를 눌러 자세히 보기</Text>
+        </View>
+        {friends.data?.length ? friends.data.map((friend) => (
+          <View key={friend.userId} style={[styles.friendCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${friend.nickname}님 독서 프로필 열기`}
+              onPress={() => router.push({ pathname: '/friend/[userID]', params: { userID: friend.userId } })}
+              style={styles.friendProfile}>
+              <View style={[styles.avatar, { backgroundColor: theme.primarySoft }]}>
+                <Text style={[styles.avatarText, { color: theme.primary }]}>{friend.nickname.slice(0, 1)}</Text>
+              </View>
+              <View style={styles.friendCopy}>
+                <View style={styles.friendNameRow}>
+                  <Text style={[styles.friendName, { color: theme.text }]}>{friend.nickname}</Text>
+                  {friend.readingNow ? <Text style={[styles.liveText, { color: theme.accent }]}>● 읽는 중</Text> : null}
+                </View>
+                <Text numberOfLines={1} style={[styles.friendBio, { color: theme.textSecondary }]}>{friend.currentTitle || friend.bio || '공개한 독서 근황이 아직 없어요'}</Text>
+                {friend.normalizedProgress !== undefined ? <ProgressBar value={friend.normalizedProgress / 100} /> : null}
+                <Text style={[styles.detailHint, { color: theme.primary }]}>독서 프로필 보기 ›</Text>
+              </View>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${friend.nickname} 친구 관리`}
+              onPress={() => Alert.alert(`${friend.nickname}님 관리`, undefined, [
+                { text: '취소', style: 'cancel' },
+                { text: '연결 끊기', onPress: () => confirmRelationship(friend.userId, friend.nickname, 'remove') },
+                { text: '차단', style: 'destructive', onPress: () => confirmRelationship(friend.userId, friend.nickname, 'block') },
+              ])}
+              style={[styles.moreButton, { backgroundColor: theme.backgroundElement }]}>
+              <Text style={[styles.moreText, { color: theme.textSecondary }]}>•••</Text>
+            </Pressable>
+          </View>
+        )) : !friends.isFetching && !friends.isError ? (
+          <View style={[styles.empty, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Text style={[styles.emptyTitle, { color: theme.text }]}>첫 독서 친구를 초대해 보세요</Text>
+            <Text style={[styles.emptyCopy, { color: theme.textSecondary }]}>연결되면 이곳에서 서로의 책과 독서 소식을 확인할 수 있어요.</Text>
+          </View>
+        ) : null}
       </View>
 
       <View style={[styles.inviteCard, { backgroundColor: theme.primarySoft, borderColor: theme.border }]}>
-        <Text style={[styles.cardTitle, { color: theme.text }]}>내 초대 보내기</Text>
+        <Text style={[styles.cardTitle, { color: theme.text }]}>새 친구 초대하기</Text>
         <Text style={[styles.cardCopy, { color: theme.textSecondary }]}>초대는 7일 동안 한 번만 사용할 수 있어요.</Text>
         {activeInvite ? (
           <View style={[styles.inviteLinkBox, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -138,10 +202,6 @@ export default function FriendsScreen() {
           </Pressable>
         ) : null}
       </View>
-
-      {friends.isError ? (
-        <FeedbackBanner title="친구 목록을 불러오지 못했어요" error={friends.error} onAction={() => void friends.refetch()} />
-      ) : null}
 
       <Pressable
         accessibilityRole="button"
@@ -179,45 +239,11 @@ export default function FriendsScreen() {
         </View>
       </View>
 
-      <View style={styles.section}>
-        <View style={styles.sectionHeading}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>연결된 친구</Text>
-          <Text style={[styles.sectionMeta, { color: theme.textSecondary }]}>{friends.data?.length ?? 0}명</Text>
-        </View>
-        {friends.data?.length ? friends.data.map((friend) => (
-          <View key={friend.userId} style={[styles.friendCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <View style={[styles.avatar, { backgroundColor: theme.primarySoft }]}>
-              <Text style={[styles.avatarText, { color: theme.primary }]}>{friend.nickname.slice(0, 1)}</Text>
-            </View>
-            <View style={styles.friendCopy}>
-              <Text style={[styles.friendName, { color: theme.text }]}>{friend.nickname}</Text>
-              {friend.readingNow ? <Text style={[styles.liveText, { color: theme.accent }]}>● 지금 읽는 중</Text> : null}
-              <Text numberOfLines={1} style={[styles.friendBio, { color: theme.textSecondary }]}>{friend.currentTitle || friend.bio || '아직 읽는 책이 없어요'}</Text>
-              {friend.normalizedProgress !== undefined ? <ProgressBar value={friend.normalizedProgress / 100} /> : null}
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`${friend.nickname} 친구 관리`}
-              onPress={() => Alert.alert(`${friend.nickname}님 관리`, undefined, [
-                { text: '취소', style: 'cancel' },
-                { text: '연결 끊기', onPress: () => confirmRelationship(friend.userId, friend.nickname, 'remove') },
-                { text: '차단', style: 'destructive', onPress: () => confirmRelationship(friend.userId, friend.nickname, 'block') },
-              ])}
-              style={[styles.moreButton, { backgroundColor: theme.backgroundElement }]}>
-              <Text style={[styles.moreText, { color: theme.textSecondary }]}>•••</Text>
-            </Pressable>
-          </View>
-        )) : !friends.isFetching && !friends.isError ? (
-          <View style={[styles.empty, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <Text style={[styles.emptyTitle, { color: theme.text }]}>첫 독서 친구를 초대해 보세요</Text>
-            <Text style={[styles.emptyCopy, { color: theme.textSecondary }]}>친구 한 명만 연결돼도 서로의 독서 흐름을 이어볼 수 있어요.</Text>
-          </View>
-        ) : null}
-      </View>
-
-      <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>
-        <Text style={[styles.backText, { color: theme.textSecondary }]}>돌아가기</Text>
-      </Pressable>
+      {!isTabRoute ? (
+        <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>
+          <Text style={[styles.backText, { color: theme.textSecondary }]}>돌아가기</Text>
+        </Pressable>
+      ) : null}
     </Screen>
   );
 }
@@ -227,6 +253,11 @@ const styles = StyleSheet.create({
   eyebrow: { fontSize: 11, fontWeight: '900', letterSpacing: 1.8 },
   title: { fontSize: 31, lineHeight: 39, fontWeight: '900', letterSpacing: -1 },
   copy: { fontSize: 14, lineHeight: 21 },
+  overview: { minHeight: 92, borderWidth: 1, borderRadius: Radius.large, flexDirection: 'row', alignItems: 'center', paddingVertical: 16 },
+  overviewItem: { flex: 1, alignItems: 'center', gap: 4 },
+  overviewValue: { fontSize: 27, fontWeight: '900' },
+  overviewLabel: { fontSize: 11, fontWeight: '800' },
+  overviewDivider: { width: 1, height: 44 },
   inviteCard: { borderWidth: 1, borderRadius: Radius.large, padding: Spacing.four, gap: 8 },
   cardTitle: { fontSize: 17, fontWeight: '900' },
   cardCopy: { fontSize: 12, lineHeight: 18 },
@@ -251,13 +282,16 @@ const styles = StyleSheet.create({
   sectionHeading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
   sectionTitle: { fontSize: 20, fontWeight: '900' },
   sectionMeta: { fontSize: 12, fontWeight: '800' },
-  friendCard: { minHeight: 86, borderWidth: 1, borderRadius: Radius.medium, padding: 13, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  friendCard: { minHeight: 104, borderWidth: 1, borderRadius: Radius.medium, padding: 13, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  friendProfile: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 72 },
   avatar: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontSize: 17, fontWeight: '900' },
   friendCopy: { flex: 1, gap: 4 },
+  friendNameRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   friendName: { fontSize: 15, fontWeight: '900' },
   liveText: { fontSize: 10, fontWeight: '900' },
   friendBio: { fontSize: 12 },
+  detailHint: { marginTop: 2, fontSize: 10, fontWeight: '900' },
   moreButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   moreText: { fontSize: 14, fontWeight: '900', letterSpacing: 1 },
   empty: { borderWidth: 1, borderRadius: Radius.large, padding: Spacing.five, alignItems: 'center', gap: 7 },

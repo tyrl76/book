@@ -112,7 +112,12 @@ export default function TogetherScreen() {
         ) : liveFriends.length ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.friendList}>
             {liveFriends.map((item) => (
-              <View key={item.userId} style={styles.friend}>
+              <Pressable
+                key={item.userId}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.nickname}님 독서 프로필 열기`}
+                onPress={() => router.push({ pathname: '/friend/[userID]', params: { userID: item.userId } })}
+                style={styles.friend}>
                 <View style={styles.friendCover}>
                   <BookCover title={item.currentTitle ?? '독서 중'} color={theme.primary} small />
                   <View style={[styles.progressBadge, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -122,7 +127,7 @@ export default function TogetherScreen() {
                   </View>
                 </View>
                 <Text numberOfLines={1} style={[styles.friendName, { color: theme.text }]}>{item.nickname}</Text>
-              </View>
+              </Pressable>
             ))}
           </ScrollView>
         ) : (
