@@ -1,3 +1,4 @@
+import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -15,6 +16,7 @@ import {
   useRemoveFriend,
 } from '@/features/social/hooks';
 import { useTheme } from '@/hooks/use-theme';
+import type { FriendInvite } from '@/types/domain';
 
 function inviteToken(value: string) {
   return value.trim().split('/').filter(Boolean).at(-1) ?? '';
@@ -29,10 +31,28 @@ export default function FriendsScreen() {
   const remove = useRemoveFriend();
   const block = useBlockUser();
   const [inviteInput, setInviteInput] = useState('');
+  const [activeInvite, setActiveInvite] = useState<FriendInvite | null>(null);
+
+  const getInvite = async (fresh = false) => {
+    if (activeInvite && !fresh) return activeInvite;
+    const invite = await createInvite.mutateAsync();
+    setActiveInvite(invite);
+    return invite;
+  };
+
+  const copyInvite = async (fresh = false) => {
+    try {
+      const invite = await getInvite(fresh);
+      await Clipboard.setStringAsync(invite.deepLink);
+      feedback.showSuccess('초대 링크를 복사했어요', '메신저나 문자 입력창에 붙여넣어 전달하세요.');
+    } catch (error) {
+      feedback.showError('초대 링크를 복사하지 못했어요', error, { label: '다시 시도', onPress: () => void copyInvite(fresh) });
+    }
+  };
 
   const shareInvite = async () => {
     try {
-      const invite = await createInvite.mutateAsync();
+      const invite = await getInvite();
       await Share.share({
         title: '책결 친구 초대',
         message: `책결에서 서로의 독서 근황을 나눠요.\n${invite.deepLink}\n초대 코드: ${invite.token}`,
@@ -89,14 +109,34 @@ export default function FriendsScreen() {
       <View style={[styles.inviteCard, { backgroundColor: theme.primarySoft, borderColor: theme.border }]}>
         <Text style={[styles.cardTitle, { color: theme.text }]}>내 초대 보내기</Text>
         <Text style={[styles.cardCopy, { color: theme.textSecondary }]}>초대는 7일 동안 한 번만 사용할 수 있어요.</Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="친구 초대 링크 공유"
-          disabled={createInvite.isPending}
-          onPress={shareInvite}
-          style={[styles.primaryButton, { backgroundColor: theme.primary }]}>
-          <Text style={[styles.primaryButtonText, { color: theme.inverse }]}>{createInvite.isPending ? '초대 만드는 중…' : '초대 링크 공유'}</Text>
-        </Pressable>
+        {activeInvite ? (
+          <View style={[styles.inviteLinkBox, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Text selectable numberOfLines={2} style={[styles.inviteLink, { color: theme.text }]}>{activeInvite.deepLink}</Text>
+          </View>
+        ) : null}
+        <View style={styles.inviteActions}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="친구 초대 링크 복사"
+            disabled={createInvite.isPending}
+            onPress={() => void copyInvite()}
+            style={[styles.primaryButton, { backgroundColor: theme.primary }]}>
+            <Text style={[styles.primaryButtonText, { color: theme.inverse }]}>{createInvite.isPending ? '초대 만드는 중…' : '링크 복사'}</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="친구 초대 링크 다른 앱으로 공유"
+            disabled={createInvite.isPending}
+            onPress={() => void shareInvite()}
+            style={[styles.secondaryInviteButton, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Text style={[styles.secondaryInviteText, { color: theme.primary }]}>공유하기</Text>
+          </Pressable>
+        </View>
+        {activeInvite ? (
+          <Pressable accessibilityRole="button" accessibilityLabel="새 친구 초대 링크 만들어 복사" disabled={createInvite.isPending} onPress={() => void copyInvite(true)} style={styles.newInviteButton}>
+            <Text style={[styles.newInviteText, { color: theme.textSecondary }]}>새 링크 만들어 복사</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {friends.isError ? (
@@ -190,8 +230,15 @@ const styles = StyleSheet.create({
   inviteCard: { borderWidth: 1, borderRadius: Radius.large, padding: Spacing.four, gap: 8 },
   cardTitle: { fontSize: 17, fontWeight: '900' },
   cardCopy: { fontSize: 12, lineHeight: 18 },
-  primaryButton: { minHeight: 50, marginTop: 7, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  inviteLinkBox: { marginTop: 5, minHeight: 48, borderWidth: 1, borderRadius: 13, paddingHorizontal: 12, paddingVertical: 9, justifyContent: 'center' },
+  inviteLink: { fontSize: 11, lineHeight: 15 },
+  inviteActions: { flexDirection: 'row', gap: 8, marginTop: 7 },
+  primaryButton: { flex: 1, minHeight: 50, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
   primaryButtonText: { fontSize: 14, fontWeight: '900' },
+  secondaryInviteButton: { flex: 1, minHeight: 50, borderWidth: 1, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  secondaryInviteText: { fontSize: 14, fontWeight: '900' },
+  newInviteButton: { minHeight: 40, alignItems: 'center', justifyContent: 'center' },
+  newInviteText: { fontSize: 11, fontWeight: '800' },
   acceptSection: { gap: 10 },
   groupLink: { minHeight: 82, borderWidth: 1, borderRadius: Radius.large, padding: Spacing.three, flexDirection: 'row', alignItems: 'center', gap: 12 },
   groupLinkCopy: { flex: 1 },

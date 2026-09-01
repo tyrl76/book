@@ -1,4 +1,6 @@
+import * as Clipboard from 'expo-clipboard';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
 import { Alert, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 
 import { ProgressBar } from '@/components/product/progress-bar';
@@ -8,6 +10,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useFeedback } from '@/features/feedback/feedback-provider';
 import { useCreateGroupInvite, useGroupMembers, useGroups, useLeaveGroup } from '@/features/groups/hooks';
 import { useTheme } from '@/hooks/use-theme';
+import type { FriendInvite } from '@/types/domain';
 
 export default function GroupDetailScreen() {
   const theme = useTheme();
@@ -21,10 +24,28 @@ export default function GroupDetailScreen() {
   const members = useGroupMembers(groupID ?? '');
   const invite = useCreateGroupInvite(groupID ?? '');
   const leave = useLeaveGroup();
+  const [activeInvite, setActiveInvite] = useState<FriendInvite | null>(null);
+
+  const getInvite = async (fresh = false) => {
+    if (activeInvite && !fresh) return activeInvite;
+    const item = await invite.mutateAsync();
+    setActiveInvite(item);
+    return item;
+  };
+
+  const copyInvite = async (fresh = false) => {
+    try {
+      const item = await getInvite(fresh);
+      await Clipboard.setStringAsync(item.deepLink);
+      feedback.showSuccess('그룹 초대 링크를 복사했어요', '메신저나 문자 입력창에 붙여넣어 전달하세요.');
+    } catch (error) {
+      feedback.showError('그룹 초대 링크를 복사하지 못했어요', error, { label: '다시 시도', onPress: () => void copyInvite(fresh) });
+    }
+  };
 
   const shareInvite = async () => {
     try {
-      const item = await invite.mutateAsync();
+      const item = await getInvite();
       await Share.share({ title: `${name} 초대`, message: `책결의 “${name}” 그룹에서 함께 읽어요.\n${item.deepLink}\n초대 코드: ${item.token}` });
     } catch (error) {
       feedback.showError('초대를 만들지 못했어요', error, { label: '다시 시도', onPress: () => void shareInvite() });
@@ -50,7 +71,14 @@ export default function GroupDetailScreen() {
         <View style={[styles.mark, { backgroundColor: theme.primary }]}><Text style={[styles.markText, { color: theme.inverse }]}>함</Text></View>
         <View style={styles.heroCopy}><Text style={[styles.title, { color: theme.text }]}>{name}</Text><Text style={[styles.copy, { color: theme.textSecondary }]}>{members.data?.length ?? group?.memberCount ?? 0}명이 각자의 책을 읽고 있어요.</Text></View>
       </View>
-      <Pressable accessibilityRole="button" onPress={shareInvite} style={[styles.inviteButton, { backgroundColor: theme.primary }]}><Text style={[styles.inviteText, { color: theme.inverse }]}>{invite.isPending ? '초대 만드는 중…' : '그룹 초대 링크 공유'}</Text></Pressable>
+      <View style={[styles.invitePanel, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        {activeInvite ? <Text selectable numberOfLines={2} style={[styles.inviteLink, { color: theme.text }]}>{activeInvite.deepLink}</Text> : <Text style={[styles.inviteGuide, { color: theme.textSecondary }]}>링크를 복사해 원하는 메신저로 직접 전달할 수 있어요.</Text>}
+        <View style={styles.inviteActions}>
+          <Pressable accessibilityRole="button" accessibilityLabel="그룹 초대 링크 복사" disabled={invite.isPending} onPress={() => void copyInvite()} style={[styles.inviteButton, { backgroundColor: theme.primary }]}><Text style={[styles.inviteText, { color: theme.inverse }]}>{invite.isPending ? '만드는 중…' : '링크 복사'}</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="그룹 초대 링크 다른 앱으로 공유" disabled={invite.isPending} onPress={() => void shareInvite()} style={[styles.shareButton, { borderColor: theme.border }]}><Text style={[styles.shareText, { color: theme.primary }]}>공유하기</Text></Pressable>
+        </View>
+        {activeInvite ? <Pressable accessibilityRole="button" accessibilityLabel="새 그룹 초대 링크 만들어 복사" disabled={invite.isPending} onPress={() => void copyInvite(true)} style={styles.newInviteButton}><Text style={[styles.newInviteText, { color: theme.textSecondary }]}>새 링크 만들어 복사</Text></Pressable> : null}
+      </View>
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: theme.text }]}>멤버</Text>
         {members.data?.map((member) => (
@@ -76,8 +104,16 @@ const styles = StyleSheet.create({
   heroCopy: { flex: 1 },
   title: { fontSize: 22, fontWeight: '900' },
   copy: { marginTop: 5, fontSize: 12, lineHeight: 18 },
-  inviteButton: { minHeight: 52, borderRadius: Radius.medium, alignItems: 'center', justifyContent: 'center' },
+  invitePanel: { borderWidth: 1, borderRadius: Radius.medium, padding: 12, gap: 9 },
+  inviteGuide: { fontSize: 12, lineHeight: 18 },
+  inviteLink: { fontSize: 11, lineHeight: 15 },
+  inviteActions: { flexDirection: 'row', gap: 8 },
+  inviteButton: { flex: 1, minHeight: 50, borderRadius: Radius.medium, alignItems: 'center', justifyContent: 'center' },
   inviteText: { fontSize: 14, fontWeight: '900' },
+  shareButton: { flex: 1, minHeight: 50, borderWidth: 1, borderRadius: Radius.medium, alignItems: 'center', justifyContent: 'center' },
+  shareText: { fontSize: 14, fontWeight: '900' },
+  newInviteButton: { minHeight: 38, alignItems: 'center', justifyContent: 'center' },
+  newInviteText: { fontSize: 11, fontWeight: '800' },
   section: { gap: 10 },
   sectionTitle: { fontSize: 18, fontWeight: '900' },
   member: { minHeight: 82, borderWidth: 1, borderRadius: Radius.medium, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },

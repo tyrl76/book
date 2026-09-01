@@ -21,7 +21,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.bookgyeol.app",
-      "versionCode": 12
+      "versionCode": 13
     },
     "web": {
       "output": "static",
