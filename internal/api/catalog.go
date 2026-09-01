@@ -26,8 +26,8 @@ func (s *Server) searchAdminBooks(response http.ResponseWriter, request *http.Re
 
 func (s *Server) searchCatalogBooks(response http.ResponseWriter, request *http.Request) {
 	query := strings.TrimSpace(request.URL.Query().Get("query"))
-	if len([]rune(query)) < 2 || len([]rune(query)) > 100 {
-		writeError(response, http.StatusBadRequest, "invalid_query", "검색어는 2자 이상 100자 이하여야 합니다")
+	if len([]rune(query)) < 1 || len([]rune(query)) > 100 {
+		writeError(response, http.StatusBadRequest, "invalid_query", "검색어는 1자 이상 100자 이하여야 합니다")
 		return
 	}
 	limit := 20

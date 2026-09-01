@@ -22,7 +22,7 @@ export default function BookSearchScreen() {
   }, [query]);
   const search = useBookSearch(debouncedQuery);
   const create = useCreateReadingRun();
-  const waitingForSearch = query.trim().length >= 2 && query.trim() !== debouncedQuery;
+  const waitingForSearch = query.trim().length >= 1 && query.trim() !== debouncedQuery;
   const openManualRegistration = () => router.push({ pathname: '/manual-book', params: { title: query.trim() } });
 
   const add = async (
@@ -68,10 +68,10 @@ export default function BookSearchScreen() {
         ) : null}
       </View>
 
-      {query.trim().length < 2 ? (
+      {query.trim().length < 1 ? (
         <View style={styles.state}>
           <Text style={[styles.stateTitle, { color: theme.text }]}>어떤 책을 읽고 있나요?</Text>
-          <Text style={[styles.stateCopy, { color: theme.textSecondary }]}>두 글자 이상 입력하거나 ISBN 바코드를 스캔해 보세요.</Text>
+          <Text style={[styles.stateCopy, { color: theme.textSecondary }]}>한 글자 제목부터 검색하거나 ISBN 바코드를 스캔해 보세요.</Text>
           <View style={styles.stateActions}>
             <Pressable
               accessibilityRole="button"

@@ -137,6 +137,9 @@ func TestAdminBookSearchPageAndAPI(t *testing.T) {
 	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), "도서 검색") || !strings.Contains(page.Body.String(), "/v1/admin/catalog/books") {
 		t.Fatalf("book search page status = %d", page.Code)
 	}
+	if !strings.Contains(page.Body.String(), `minlength="1"`) {
+		t.Fatal("book search page must allow one-character queries")
+	}
 	if !strings.Contains(page.Header().Get("Content-Security-Policy"), "frame-ancestors 'none'") {
 		t.Fatal("book search page missing restrictive content security policy")
 	}
@@ -147,7 +150,7 @@ func TestAdminBookSearchPageAndAPI(t *testing.T) {
 		t.Fatalf("unauthorized catalog status = %d", unauthorized.Code)
 	}
 
-	request := httptest.NewRequest(http.MethodGet, "/v1/admin/catalog/books?query=한강", nil)
+	request := httptest.NewRequest(http.MethodGet, "/v1/admin/catalog/books?query=눈", nil)
 	request.Header.Set("X-Admin-Key", "test-admin-key")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)

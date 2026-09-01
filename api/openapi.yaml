@@ -469,7 +469,7 @@ paths:
         - name: query
           in: query
           required: true
-          schema: { type: string, minLength: 2, maxLength: 100 }
+          schema: { type: string, minLength: 1, maxLength: 100 }
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 50, default: 20 }

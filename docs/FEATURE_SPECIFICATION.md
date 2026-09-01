@@ -42,7 +42,7 @@ Android 다운로드: `https://34-64-97-191.sslip.io/download/`
 
 | ID | 기능 | 사용자 동작·결과 | 화면/API·저장 | 상태 | 제약·예외 |
 |---|---|---|---|---|---|
-| BOOK-001 | 키워드 검색 | 제목·저자·ISBN으로 도서를 검색하고 표지, 저자, 출판사, ISBN을 확인함 | `book-search` · `GET /v1/catalog/books` · Kakao Books | ✅ 운영 중 | Kakao 장애 시 로컬 카탈로그 폴백을 사용하며 결과가 제한될 수 있음 |
+| BOOK-001 | 키워드 검색 | 한 글자부터 제목·저자·ISBN으로 도서를 검색하고 표지, 저자, 출판사, ISBN을 확인함 | `book-search` · `GET /v1/catalog/books` · Kakao Books | ✅ 운영 중 | 결과는 기본 20권으로 제한하며 Kakao 장애 시 로컬 카탈로그 폴백을 사용함 |
 | BOOK-002 | ISBN 조회 | ISBN으로 판본 한 건을 조회해 책장 등록으로 연결함 | `GET /v1/catalog/books/{isbn}` | ✅ 운영 중 | 잘못된 ISBN 또는 미등록 도서는 찾지 못할 수 있음 |
 | BOOK-003 | 바코드 스캔 | 카메라로 ISBN 바코드를 읽어 조회함 | `scan` · Expo Camera | ✅ 운영 중 | 카메라 권한 거절 시 직접 검색·등록으로 안내 |
 | BOOK-004 | 직접 등록 | 검색되지 않는 책의 제목·저자·분량·형식을 직접 입력함 | `manual-book` · `POST /v1/reading-runs/manual` | ✅ 운영 중 | 분량은 쪽·퍼센트·오디오 시간 중 형식에 맞게 입력 |

@@ -7,7 +7,7 @@ export function useBookSearch(query: string) {
   return useQuery({
     queryKey: ['catalog', 'search', normalized],
     queryFn: () => searchBooks(normalized),
-    enabled: normalized.length >= 2,
+    enabled: normalized.length >= 1,
   });
 }
 
