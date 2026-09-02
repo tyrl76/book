@@ -8,6 +8,7 @@ import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Radius, Spacing } from '@/constants/theme';
 import { useFeedback } from '@/features/feedback/feedback-provider';
 import { useFeed } from '@/features/feed/hooks';
+import { useReadingRuns } from '@/features/reading/hooks';
 import { useBlockUser, useFeedReaction, useFriends, useRemoveFriend } from '@/features/social/hooks';
 import { useTheme } from '@/hooks/use-theme';
 import type { FeedEvent } from '@/types/domain';
@@ -31,6 +32,7 @@ export default function FriendDetailScreen() {
   const feedback = useFeedback();
   const friends = useFriends();
   const feed = useFeed();
+  const runs = useReadingRuns();
   const reaction = useFeedReaction();
   const remove = useRemoveFriend();
   const block = useBlockUser();
@@ -39,6 +41,9 @@ export default function FriendDetailScreen() {
   const sharedBookCount = new Set(activities.map((item) => `${item.title}\u0000${item.author}`)).size;
   const finishedCount = activities.filter((item) => item.type === 'finished').length;
   const reactionCount = activities.reduce((sum, item) => sum + item.reactionCount, 0);
+  const sharedCurrentRun = friend?.currentTitle
+    ? (runs.data ?? []).find((item) => item.title.trim().toLocaleLowerCase() === friend.currentTitle?.trim().toLocaleLowerCase())
+    : undefined;
 
   const confirmRelationship = (action: 'remove' | 'block') => {
     if (!friend) return;
@@ -89,7 +94,9 @@ export default function FriendDetailScreen() {
   }
 
   return (
-    <Screen>
+    <Screen
+      refreshing={friends.isRefetching || feed.isRefetching || runs.isRefetching}
+      onRefresh={() => { void Promise.all([friends.refetch(), feed.refetch(), runs.refetch()]); }}>
       <Stack.Screen options={{ title: `${friend.nickname}님의 독서 프로필` }} />
 
       {friends.isError ? <FeedbackBanner compact title="친구 정보를 새로 불러오지 못했어요" error={friends.error} onAction={() => void friends.refetch()} /> : null}
@@ -125,6 +132,15 @@ export default function FriendDetailScreen() {
               ) : (
                 <Text style={[styles.progressText, { color: theme.textSecondary }]}>진척도는 공개하지 않았어요</Text>
               )}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={sharedCurrentRun ? `${friend.currentTitle} 내 기록 열기` : `${friend.currentTitle} 검색하기`}
+                onPress={() => sharedCurrentRun
+                  ? router.push({ pathname: '/book/[runID]', params: { runID: sharedCurrentRun.id } })
+                  : router.push({ pathname: '/book-search', params: { q: friend.currentTitle } })}
+                style={[styles.bookAction, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <Text style={[styles.bookActionText, { color: theme.primary }]}>{sharedCurrentRun ? '내 기록과 함께 보기' : '이 책 찾아보기'}</Text>
+              </Pressable>
             </View>
           </View>
         ) : (
@@ -231,6 +247,8 @@ const styles = StyleSheet.create({
   currentBookCopy: { flex: 1, gap: 7 },
   currentTitle: { fontSize: 18, lineHeight: 23, fontWeight: '900' },
   progressText: { fontSize: 11, fontWeight: '800' },
+  bookAction: { alignSelf: 'flex-start', minHeight: 42, borderWidth: 1, borderRadius: Radius.pill, paddingHorizontal: 13, alignItems: 'center', justifyContent: 'center' },
+  bookActionText: { fontSize: 11, fontWeight: '900' },
   statsCard: { minHeight: 98, borderWidth: 1, borderRadius: Radius.large, flexDirection: 'row', alignItems: 'center', paddingVertical: 16 },
   statItem: { flex: 1, alignItems: 'center', gap: 5 },
   statValue: { fontSize: 23, fontWeight: '900' },

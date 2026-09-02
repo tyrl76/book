@@ -29,7 +29,7 @@ const shelfOptions: { status: ReadingRun['status']; label: string }[] = [
 
 const settings = [
   { label: '프로필 편집', description: '닉네임과 소개를 바꿔요', route: '/profile-edit' as const },
-  { label: '친구와 그룹', description: '함께 읽는 사람을 관리해요', route: '/friends' as const },
+  { label: '친구와 그룹', description: '함께 읽는 사람을 관리해요', route: '/people' as const },
   { label: '독서 통계와 목표', description: '달력과 연간 목표를 확인해요', route: '/stats' as const },
   { label: '공개 범위', description: '기본 공유 범위를 선택해요', route: '/privacy' as const },
   { label: '알림 설정', description: '응원과 독서 소식 알림을 정해요', route: '/notifications' as const },

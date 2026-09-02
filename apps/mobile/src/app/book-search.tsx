@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -16,11 +16,13 @@ import type { Book, ReadingRun } from '@/types/domain';
 
 export default function BookSearchScreen() {
   const theme = useTheme();
+  const params = useLocalSearchParams<{ q?: string }>();
+  const initialQuery = (Array.isArray(params.q) ? params.q[0] : params.q)?.trim() ?? '';
   const { userID } = useAuth();
   const feedback = useFeedback();
-  const [query, setQuery] = useState('');
-  const [debouncedQuery, setDebouncedQuery] = useState('');
-  const [submittedQuery, setSubmittedQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
+  const [debouncedQuery, setDebouncedQuery] = useState(initialQuery);
+  const [submittedQuery, setSubmittedQuery] = useState(initialQuery);
   const [suggestionsVisible, setSuggestionsVisible] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>(() => loadRecentSearches(userID ?? ''));
   useEffect(() => {

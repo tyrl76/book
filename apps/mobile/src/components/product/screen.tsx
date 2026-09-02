@@ -1,5 +1,14 @@
 import type { PropsWithChildren } from 'react';
-import { ScrollView, type NativeScrollEvent, type NativeSyntheticEvent, type StyleProp, StyleSheet, View, type ViewStyle } from 'react-native';
+import {
+  RefreshControl,
+  ScrollView,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  type StyleProp,
+  StyleSheet,
+  View,
+  type ViewStyle,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
@@ -9,9 +18,18 @@ type ScreenProps = PropsWithChildren<{
   contentContainerStyle?: StyleProp<ViewStyle>;
   onEndReached?: () => void;
   endReachedThreshold?: number;
+  refreshing?: boolean;
+  onRefresh?: () => void;
 }>;
 
-export function Screen({ children, contentContainerStyle, onEndReached, endReachedThreshold = 480 }: ScreenProps) {
+export function Screen({
+  children,
+  contentContainerStyle,
+  onEndReached,
+  endReachedThreshold = 480,
+  refreshing = false,
+  onRefresh,
+}: ScreenProps) {
   const theme = useTheme();
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (!onEndReached) return;
@@ -28,7 +46,16 @@ export function Screen({ children, contentContainerStyle, onEndReached, endReach
           showsVerticalScrollIndicator={false}
           onScroll={onEndReached ? handleScroll : undefined}
           scrollEventThrottle={160}
-          keyboardShouldPersistTaps="handled">
+          keyboardShouldPersistTaps="handled"
+          refreshControl={onRefresh ? (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[theme.primary]}
+              progressBackgroundColor={theme.card}
+              tintColor={theme.primary}
+            />
+          ) : undefined}>
           {children}
         </ScrollView>
       </SafeAreaView>

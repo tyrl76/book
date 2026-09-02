@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BookCover } from '@/components/product/book-cover';
@@ -8,7 +9,9 @@ import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Radius, Spacing } from '@/constants/theme';
 import { useFeedback } from '@/features/feedback/feedback-provider';
 import { useFeed } from '@/features/feed/hooks';
+import { useReadingRuns } from '@/features/reading/hooks';
 import { useFeedReaction, useFriends } from '@/features/social/hooks';
+import { useAuth } from '@/features/auth/auth-provider';
 import { useTheme } from '@/hooks/use-theme';
 import type { FeedEvent } from '@/types/domain';
 
@@ -21,6 +24,15 @@ const milestoneCopy: Record<FeedEvent['type'], string> = {
   shared_note: '한 줄 감상을 남겼어요',
 };
 
+type FeedFilter = 'all' | 'friends' | 'finished' | 'notes';
+
+const feedFilters: { value: FeedFilter; label: string }[] = [
+  { value: 'all', label: '전체' },
+  { value: 'friends', label: '친구 소식' },
+  { value: 'finished', label: '완독' },
+  { value: 'notes', label: '감상' },
+];
+
 function relativeTime(value: string) {
   const minutes = Math.max(1, Math.round((Date.now() - new Date(value).getTime()) / 60_000));
   if (minutes < 60) return `${minutes}분 전`;
@@ -32,14 +44,30 @@ function relativeTime(value: string) {
 export default function TogetherScreen() {
   const theme = useTheme();
   const feedback = useFeedback();
+  const { userID } = useAuth();
   const feed = useFeed();
   const friends = useFriends();
+  const runs = useReadingRuns();
   const reaction = useFeedReaction();
-  const events = feed.data ?? [];
+  const [feedFilter, setFeedFilter] = useState<FeedFilter>('all');
+  const events = useMemo(() => feed.data ?? [], [feed.data]);
+  const filteredEvents = useMemo(() => events.filter((item) => {
+    if (feedFilter === 'friends') return item.actorId !== userID;
+    if (feedFilter === 'finished') return item.type === 'finished';
+    if (feedFilter === 'notes') return item.type === 'shared_note' || Boolean(item.note);
+    return true;
+  }), [events, feedFilter, userID]);
+  const hasFriends = Boolean(friends.data?.length);
+  const hasBooks = Boolean(runs.data?.length);
   const liveFriends = (friends.data ?? []).filter((item) => item.readingNow);
+  const refreshing = feed.isRefetching || friends.isRefetching || runs.isRefetching;
+
+  const refresh = () => {
+    void Promise.all([feed.refetch(), friends.refetch(), runs.refetch()]);
+  };
 
   return (
-    <Screen>
+    <Screen refreshing={refreshing} onRefresh={refresh}>
       <View style={styles.header}>
         <View style={styles.headerCopy}>
           <View style={styles.brandRow}>
@@ -52,7 +80,7 @@ export default function TogetherScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="친구 관리 열기"
-          onPress={() => router.push('/friends')}
+          onPress={() => router.push('/people')}
           style={[styles.avatar, { backgroundColor: theme.primary }]}>
           <Text style={[styles.avatarText, { color: theme.inverse }]}>결</Text>
         </Pressable>
@@ -72,6 +100,23 @@ export default function TogetherScreen() {
         <FeedbackBanner title="독서 근황을 불러오지 못했어요" error={feed.error} onAction={() => void feed.refetch()} />
       ) : null}
 
+      {hasFriends && runs.data && !hasBooks ? (
+        <View style={[styles.activationCard, { backgroundColor: theme.primary, borderColor: theme.primary }]}>
+          <View style={styles.activationCopy}>
+            <Text style={[styles.activationEyebrow, { color: theme.inverse }]}>FRIEND CONNECTED</Text>
+            <Text style={[styles.activationTitle, { color: theme.inverse }]}>이제 내 첫 책을 골라볼까요?</Text>
+            <Text style={[styles.activationText, { color: theme.inverse }]}>책을 추가하고 기록하면 연결된 친구와 독서 흐름이 자연스럽게 이어져요.</Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="첫 책 찾기"
+            onPress={() => router.push('/book-search')}
+            style={[styles.activationButton, { backgroundColor: theme.card }]}>
+            <Text style={[styles.activationButtonText, { color: theme.primary }]}>책 찾기</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       <View style={[styles.summary, { backgroundColor: theme.primarySoft, borderColor: theme.border }]}>
         <View style={styles.summaryCopy}>
           <View style={styles.summaryTitleRow}>
@@ -79,7 +124,11 @@ export default function TogetherScreen() {
             <Text style={[styles.summaryTitle, { color: theme.text }]}>지금 이어지는 독서</Text>
           </View>
           <Text style={[styles.summaryText, { color: theme.textSecondary }]}>
-            {liveFriends.length ? `친구 ${liveFriends.length}명이 지금 책을 펼치고 있어요.` : '친구가 독서를 시작하면 여기에 바로 보여요.'}
+            {liveFriends.length
+              ? `친구 ${liveFriends.length}명이 지금 책을 펼치고 있어요.`
+              : hasFriends
+                ? `연결된 친구 ${friends.data?.length ?? 0}명의 다음 기록을 기다리고 있어요.`
+                : '친구가 독서를 시작하면 여기에 바로 보여요.'}
           </Text>
         </View>
         <View style={[styles.summaryBadge, { backgroundColor: theme.card }]}>
@@ -143,8 +192,29 @@ export default function TogetherScreen() {
           <Text style={[styles.sectionMeta, { color: theme.textSecondary }]}>최근 소식</Text>
         </View>
 
+        {events.length ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterList}>
+            {feedFilters.map((item) => {
+              const selected = feedFilter === item.value;
+              return (
+                <Pressable
+                  key={item.value}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  onPress={() => setFeedFilter(item.value)}
+                  style={[
+                    styles.filterChip,
+                    { backgroundColor: selected ? theme.primary : theme.card, borderColor: selected ? theme.primary : theme.border },
+                  ]}>
+                  <Text style={[styles.filterChipText, { color: selected ? theme.inverse : theme.textSecondary }]}>{item.label}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        ) : null}
+
         <View style={styles.feedList}>
-          {events.map((item) => (
+          {filteredEvents.map((item) => (
             <View key={item.id} style={[styles.feedCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
               <View style={styles.cardTop}>
                 <View style={[styles.tinyAvatar, { backgroundColor: theme.primarySoft }]}>
@@ -207,15 +277,31 @@ export default function TogetherScreen() {
             </View>
           ))}
 
+          {events.length > 0 && !filteredEvents.length ? (
+            <View style={[styles.emptyInline, { backgroundColor: theme.backgroundElement }]}>
+              <Text style={[styles.emptyTitle, { color: theme.text }]}>이 조건의 소식은 아직 없어요</Text>
+              <Text style={[styles.emptyInlineText, { color: theme.textSecondary }]}>다른 항목을 선택하거나 전체 소식을 확인해 보세요.</Text>
+              <Pressable accessibilityRole="button" onPress={() => setFeedFilter('all')} style={styles.resetFilterButton}>
+                <Text style={[styles.resetFilterText, { color: theme.primary }]}>전체 소식 보기</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
           {!events.length && !feed.isFetching && !feed.isError ? (
             <View style={[styles.emptyCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <Text style={[styles.emptyTitle, { color: theme.text }]}>아직 새 독서 소식이 없어요</Text>
-              <Text style={[styles.emptyCopy, { color: theme.textSecondary }]}>친구를 초대하면 서로의 첫 기록부터 이어볼 수 있어요.</Text>
+              <Text style={[styles.emptyTitle, { color: theme.text }]}>{hasFriends ? '친구 연결은 완료됐어요' : '아직 새 독서 소식이 없어요'}</Text>
+              <Text style={[styles.emptyCopy, { color: theme.textSecondary }]}>
+                {hasFriends
+                  ? hasBooks
+                    ? '나나 친구가 공개 기록을 남기면 이곳에 시간순으로 모여요.'
+                    : '첫 책을 추가하고 기록하면 친구와 공유할 첫 소식이 만들어져요.'
+                  : '친구를 초대하면 서로의 첫 기록부터 이어볼 수 있어요.'}
+              </Text>
               <Pressable
                 accessibilityRole="button"
-                onPress={() => router.push('/friends')}
+                onPress={() => router.push(hasFriends && !hasBooks ? '/book-search' : '/people')}
                 style={[styles.emptyButton, { backgroundColor: theme.primary }]}>
-                <Text style={[styles.emptyButtonText, { color: theme.inverse }]}>친구 초대하기</Text>
+                <Text style={[styles.emptyButtonText, { color: theme.inverse }]}>{hasFriends && !hasBooks ? '첫 책 추가하기' : '친구 보기'}</Text>
               </Pressable>
             </View>
           ) : null}
@@ -239,6 +325,13 @@ const styles = StyleSheet.create({
   intro: { fontSize: 14, lineHeight: 21 },
   avatar: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontWeight: '900', fontSize: 16 },
+  activationCard: { borderWidth: 1, borderRadius: Radius.large, padding: Spacing.four, flexDirection: 'row', alignItems: 'center', gap: 14 },
+  activationCopy: { flex: 1, gap: 5 },
+  activationEyebrow: { fontSize: 9, fontWeight: '900', letterSpacing: 1.3, opacity: 0.78 },
+  activationTitle: { fontSize: 19, lineHeight: 25, fontWeight: '900', letterSpacing: -0.4 },
+  activationText: { fontSize: 12, lineHeight: 18, opacity: 0.84 },
+  activationButton: { minWidth: 78, minHeight: 46, borderRadius: Radius.medium, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 13 },
+  activationButtonText: { fontSize: 13, fontWeight: '900' },
   summary: { borderWidth: 1, borderRadius: Radius.large, padding: Spacing.three, flexDirection: 'row', alignItems: 'center', gap: 12 },
   summaryCopy: { flex: 1, gap: 4 },
   summaryTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
@@ -257,6 +350,9 @@ const styles = StyleSheet.create({
   sectionHeading: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
   sectionTitle: { fontSize: 21, fontWeight: '900', letterSpacing: -0.5 },
   sectionMeta: { fontSize: 12, fontWeight: '700' },
+  filterList: { gap: 8, paddingRight: Spacing.four },
+  filterChip: { minHeight: 40, borderWidth: 1, borderRadius: Radius.pill, paddingHorizontal: 15, alignItems: 'center', justifyContent: 'center' },
+  filterChipText: { fontSize: 12, fontWeight: '900' },
   friendList: { gap: 18, paddingRight: Spacing.four, paddingVertical: 4 },
   friend: { width: 70, alignItems: 'center', gap: 8 },
   friendCover: { position: 'relative' },
@@ -288,6 +384,8 @@ const styles = StyleSheet.create({
   emptyCard: { borderWidth: 1, borderRadius: Radius.large, padding: Spacing.five, alignItems: 'center', gap: 6 },
   emptyTitle: { fontSize: 17, fontWeight: '900', textAlign: 'center' },
   emptyCopy: { fontSize: 13, lineHeight: 19, textAlign: 'center' },
+  resetFilterButton: { minHeight: 44, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
+  resetFilterText: { fontSize: 12, fontWeight: '900' },
   emptyButton: { marginTop: 8, minHeight: 48, borderRadius: Radius.medium, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'center' },
   emptyButtonText: { fontSize: 13, fontWeight: '900' },
   refreshing: { textAlign: 'center', fontSize: 12 },

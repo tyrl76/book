@@ -35,6 +35,9 @@ export default function FriendsScreen() {
   const [activeInvite, setActiveInvite] = useState<FriendInvite | null>(null);
   const isTabRoute = pathname === '/people';
   const liveFriendCount = (friends.data ?? []).filter((friend) => friend.readingNow).length;
+  const refresh = () => {
+    void friends.refetch();
+  };
 
   const getInvite = async (fresh = false) => {
     if (activeInvite && !fresh) return activeInvite;
@@ -102,7 +105,7 @@ export default function FriendsScreen() {
   };
 
   return (
-    <Screen>
+    <Screen refreshing={friends.isRefetching} onRefresh={refresh}>
       <View style={styles.heading}>
         <Text style={[styles.eyebrow, { color: theme.primary }]}>READING TOGETHER</Text>
         <Text style={[styles.title, { color: theme.text }]}>내 독서 친구</Text>
