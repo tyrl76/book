@@ -12,6 +12,7 @@ import { useFeedback } from '@/features/feedback/feedback-provider';
 import { useGroups } from '@/features/groups/hooks';
 import { useDeleteReadingRun, useProgressEntries, useReadingRuns, useUpdateReadingRun } from '@/features/reading/hooks';
 import { useTheme } from '@/hooks/use-theme';
+import { nextReadingSelectionRequest } from '@/lib/navigation';
 import type { ReadingRun } from '@/types/domain';
 
 const statuses: { value: ReadingRun['status']; label: string }[] = [
@@ -51,15 +52,34 @@ export default function BookDetailScreen() {
   const update = useUpdateReadingRun();
   const remove = useDeleteReadingRun();
   const [removeDialogVisible, setRemoveDialogVisible] = useState(false);
+  const [sharingExpanded, setSharingExpanded] = useState(false);
 
   const change = (input: Partial<Pick<ReadingRun, 'status' | 'visibility' | 'shareGroupId' | 'progressPrecision' | 'autoShare'>>) => {
-    if (!runID) return;
+    if (!runID || update.isPending) return;
     update.mutate({ readingRunID: runID, input }, {
       onError: (error) => feedback.showError('책 설정을 바꾸지 못했어요', error, {
         label: '다시 시도',
         onPress: () => change(input),
       }),
     });
+  };
+
+  const openRecord = async () => {
+    if (!runID || !run || update.isPending) return;
+    try {
+      if (run.status === 'want_to_read' || run.status === 'paused') {
+        await update.mutateAsync({ readingRunID: runID, input: { status: 'reading' } });
+      }
+      router.push({
+        pathname: '/record',
+        params: { runID, selectionRequest: nextReadingSelectionRequest() },
+      });
+    } catch (error) {
+      feedback.showError('읽기를 시작하지 못했어요', error, {
+        label: '다시 시도',
+        onPress: () => void openRecord(),
+      });
+    }
   };
 
   const removeFromLibrary = async () => {
@@ -91,6 +111,18 @@ export default function BookDetailScreen() {
   }
 
   const unit = run.progressBasis === 'pages' ? '쪽' : run.progressBasis === 'audio_seconds' ? '초' : '%';
+  const recordActionLabel = run.status === 'reading'
+    ? '이 책 기록하기'
+    : run.status === 'paused'
+      ? '계속 읽고 기록하기'
+      : run.status === 'want_to_read'
+        ? '읽기 시작하기'
+        : null;
+  const visibilityLabel = run.visibility === 'group'
+    ? `${groups.data?.find((group) => group.id === run.shareGroupId)?.name ?? '선택한 모임'} 공개`
+    : visibilities.find((item) => item.value === run.visibility)?.label ?? '공개 범위 미설정';
+  const precisionLabel = precisions.find((item) => item.value === run.progressPrecision)?.label ?? '진척 공개 미설정';
+  const sharingSummary = `${visibilityLabel} · ${precisionLabel} · 자동 공유 ${run.autoShare ? '켬' : '끔'}`;
 
   return (
     <Screen>
@@ -101,11 +133,8 @@ export default function BookDetailScreen() {
       {entries.isError ? (
         <FeedbackBanner compact title="기록 타임라인을 불러오지 못했어요" error={entries.error} onAction={() => void entries.refetch()} />
       ) : null}
-      {groups.isError ? (
-        <FeedbackBanner compact title="공유할 그룹을 불러오지 못했어요" error={groups.error} onAction={() => void groups.refetch()} />
-      ) : null}
       <View style={[styles.hero, { backgroundColor: theme.primarySoft, borderColor: theme.border }]}>
-        <BookCover title={run.title} color={run.coverColor} />
+        <BookCover title={run.title} color={run.coverColor} coverUrl={run.coverUrl} />
         <View style={styles.heroCopy}>
           <Text numberOfLines={2} style={[styles.title, { color: theme.text }]}>{run.title}</Text>
           <Text style={[styles.author, { color: theme.textSecondary }]}>{run.author}</Text>
@@ -114,44 +143,30 @@ export default function BookDetailScreen() {
         </View>
       </View>
 
-      <ChoiceSection title="독서 상태" items={statuses} selected={run.status} onSelect={(status) => change({ status })} />
-      <ChoiceSection title="공개 범위" items={visibilities} selected={run.visibility} onSelect={(visibility) => change({ visibility })} />
-      {(groups.data?.length ?? 0) > 0 ? (
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>독서 모임에만 공유</Text>
-          <Text style={[styles.sectionCopy, { color: theme.textSecondary }]}>선택한 모임 구성원에게만 다음 마일스톤이 보여요.</Text>
-          <View style={styles.choices}>
-            {groups.data?.map((group) => {
-              const active = run.visibility === 'group' && run.shareGroupId === group.id;
-              return (
-                <Pressable
-                  key={group.id}
-                  accessibilityRole="radio"
-                  accessibilityState={{ checked: active }}
-                  onPress={() => change({ visibility: 'group', shareGroupId: group.id })}
-                  style={[styles.choice, { backgroundColor: active ? theme.primarySoft : theme.card, borderColor: active ? theme.primary : theme.border }]}>
-                  <Text style={[styles.choiceText, { color: active ? theme.primary : theme.textSecondary }]}>{group.name}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
+      {recordActionLabel ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${run.title} ${recordActionLabel}`}
+          accessibilityState={{ disabled: update.isPending }}
+          disabled={update.isPending}
+          onPress={() => void openRecord()}
+          style={({ pressed }) => [
+            styles.recordButton,
+            { backgroundColor: theme.primary, opacity: pressed || update.isPending ? 0.58 : 1 },
+          ]}>
+          <Text style={[styles.recordButtonText, { color: theme.inverse }]}>
+            {update.isPending ? '처리 중…' : recordActionLabel}
+          </Text>
+        </Pressable>
       ) : null}
-      <ChoiceSection title="진척 공개" items={precisions} selected={run.progressPrecision} onSelect={(progressPrecision) => change({ progressPrecision })} />
 
-      <Pressable
-        accessibilityRole="switch"
-        accessibilityState={{ checked: run.autoShare }}
-        onPress={() => change({ autoShare: !run.autoShare })}
-        style={[styles.switchRow, { backgroundColor: theme.card, borderColor: theme.border }]}>
-        <View style={styles.switchCopy}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>마일스톤 자동 공유</Text>
-          <Text style={[styles.sectionCopy, { color: theme.textSecondary }]}>25·50·75%와 완독 소식을 선택한 범위에 공유해요.</Text>
-        </View>
-        <View style={[styles.switchTrack, { backgroundColor: run.autoShare ? theme.primary : theme.backgroundElement }]}>
-          <View style={[styles.switchThumb, { backgroundColor: theme.inverse, transform: [{ translateX: run.autoShare ? 18 : 0 }] }]} />
-        </View>
-      </Pressable>
+      <ChoiceSection
+        disabled={update.isPending}
+        title="독서 상태"
+        items={statuses}
+        selected={run.status}
+        onSelect={(status) => change({ status })}
+      />
 
       <View style={styles.section}>
         <View style={styles.sectionHeading}>
@@ -173,6 +188,90 @@ export default function BookDetailScreen() {
         {!entries.data?.length && !entries.isFetching && !entries.isError ? <Text style={[styles.emptyCopy, { color: theme.textSecondary }]}>아직 남긴 기록이 없어요.</Text> : null}
       </View>
 
+      <View style={[styles.sharingCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`공유 설정 ${sharingExpanded ? '접기' : '펼치기'}`}
+          accessibilityState={{ expanded: sharingExpanded }}
+          onPress={() => setSharingExpanded((value) => !value)}
+          style={({ pressed }) => [styles.sharingHeader, { opacity: pressed ? 0.68 : 1 }]}>
+          <View style={styles.sharingHeaderCopy}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>공유 설정</Text>
+            <Text style={[styles.sharingSummary, { color: theme.textSecondary }]}>{sharingSummary}</Text>
+          </View>
+          <Text style={[styles.sharingChevron, { color: theme.primary }]}>{sharingExpanded ? '⌃' : '⌄'}</Text>
+        </Pressable>
+
+        {sharingExpanded ? (
+          <View style={[styles.sharingContent, { borderTopColor: theme.border }]}>
+            {groups.isError ? (
+              <FeedbackBanner compact title="공유할 그룹을 불러오지 못했어요" error={groups.error} onAction={() => void groups.refetch()} />
+            ) : null}
+            <ChoiceSection
+              disabled={update.isPending}
+              title="공개 범위"
+              items={visibilities}
+              selected={run.visibility}
+              onSelect={(visibility) => change({ visibility })}
+            />
+            {(groups.data?.length ?? 0) > 0 ? (
+              <View style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: theme.text }]}>독서 모임에만 공유</Text>
+                <Text style={[styles.sectionCopy, { color: theme.textSecondary }]}>선택한 모임 구성원에게만 다음 마일스톤이 보여요.</Text>
+                <View style={styles.choices}>
+                  {groups.data?.map((group) => {
+                    const active = run.visibility === 'group' && run.shareGroupId === group.id;
+                    return (
+                      <Pressable
+                        key={group.id}
+                        accessibilityRole="radio"
+                        accessibilityState={{ checked: active, disabled: update.isPending }}
+                        disabled={update.isPending}
+                        onPress={() => change({ visibility: 'group', shareGroupId: group.id })}
+                        style={[
+                          styles.choice,
+                          {
+                            backgroundColor: active ? theme.primarySoft : theme.card,
+                            borderColor: active ? theme.primary : theme.border,
+                            opacity: update.isPending ? 0.55 : 1,
+                          },
+                        ]}>
+                        <Text style={[styles.choiceText, { color: active ? theme.primary : theme.textSecondary }]}>{group.name}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : null}
+            <ChoiceSection
+              disabled={update.isPending}
+              title="진척 공개"
+              items={precisions}
+              selected={run.progressPrecision}
+              onSelect={(progressPrecision) => change({ progressPrecision })}
+            />
+
+            <Pressable
+              accessibilityRole="switch"
+              accessibilityState={{ checked: run.autoShare, disabled: update.isPending }}
+              disabled={update.isPending}
+              onPress={() => change({ autoShare: !run.autoShare })}
+              style={[
+                styles.switchRow,
+                { backgroundColor: theme.backgroundElement, borderColor: theme.border, opacity: update.isPending ? 0.55 : 1 },
+              ]}>
+              <View style={styles.switchCopy}>
+                <Text style={[styles.sectionTitle, { color: theme.text }]}>마일스톤 자동 공유</Text>
+                <Text style={[styles.sectionCopy, { color: theme.textSecondary }]}>25·50·75%와 완독 소식을 선택한 범위에 공유해요.</Text>
+              </View>
+              <View style={[styles.switchTrack, { backgroundColor: run.autoShare ? theme.primary : theme.card }]}>
+                <View style={[styles.switchThumb, { backgroundColor: theme.inverse, transform: [{ translateX: run.autoShare ? 18 : 0 }] }]} />
+              </View>
+            </Pressable>
+          </View>
+        ) : null}
+      </View>
+
       <View style={[styles.dangerZone, { borderColor: theme.border }]}>
         <View style={styles.switchCopy}>
           <Text style={[styles.dangerTitle, { color: theme.accent }]}>책장에서 삭제</Text>
@@ -181,10 +280,10 @@ export default function BookDetailScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${run.title} 책장에서 삭제`}
-          accessibilityState={{ disabled: remove.isPending }}
-          disabled={remove.isPending}
+          accessibilityState={{ disabled: remove.isPending || update.isPending }}
+          disabled={remove.isPending || update.isPending}
           onPress={() => setRemoveDialogVisible(true)}
-          style={({ pressed }) => [styles.removeButton, { borderColor: theme.accent, opacity: pressed || remove.isPending ? 0.55 : 1 }]}>
+          style={({ pressed }) => [styles.removeButton, { borderColor: theme.accent, opacity: pressed || remove.isPending || update.isPending ? 0.55 : 1 }]}>
           <Text style={[styles.removeButtonText, { color: theme.accent }]}>{remove.isPending ? '삭제 중…' : '삭제'}</Text>
         </Pressable>
       </View>
@@ -202,11 +301,13 @@ export default function BookDetailScreen() {
 }
 
 function ChoiceSection<T extends string>({
+  disabled = false,
   title,
   items,
   selected,
   onSelect,
 }: {
+  disabled?: boolean;
   title: string;
   items: { value: T; label: string }[];
   selected: T;
@@ -223,9 +324,17 @@ function ChoiceSection<T extends string>({
             <Pressable
               key={item.value}
               accessibilityRole="radio"
-              accessibilityState={{ checked: active }}
+              accessibilityState={{ checked: active, disabled }}
+              disabled={disabled}
               onPress={() => onSelect(item.value)}
-              style={[styles.choice, { backgroundColor: active ? theme.primarySoft : theme.card, borderColor: active ? theme.primary : theme.border }]}>
+              style={[
+                styles.choice,
+                {
+                  backgroundColor: active ? theme.primarySoft : theme.card,
+                  borderColor: active ? theme.primary : theme.border,
+                  opacity: disabled ? 0.55 : 1,
+                },
+              ]}>
               <Text style={[styles.choiceText, { color: active ? theme.primary : theme.textSecondary }]}>{item.label}</Text>
             </Pressable>
           );
@@ -242,6 +351,8 @@ const styles = StyleSheet.create({
   title: { fontSize: 22, lineHeight: 28, fontWeight: '900' },
   author: { fontSize: 13 },
   progress: { fontSize: 11, fontWeight: '900' },
+  recordButton: { minHeight: 56, borderRadius: Radius.medium, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.three },
+  recordButtonText: { fontSize: 15, fontWeight: '900' },
   section: { gap: 11 },
   sectionHeading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
   sectionTitle: { fontSize: 17, fontWeight: '900' },
@@ -254,6 +365,12 @@ const styles = StyleSheet.create({
   switchCopy: { flex: 1 },
   switchTrack: { width: 46, height: 28, borderRadius: 14, padding: 3 },
   switchThumb: { width: 22, height: 22, borderRadius: 11 },
+  sharingCard: { borderWidth: 1, borderRadius: Radius.large, overflow: 'hidden' },
+  sharingHeader: { minHeight: 78, padding: Spacing.three, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  sharingHeaderCopy: { flex: 1, gap: 5 },
+  sharingSummary: { fontSize: 11, lineHeight: 17, fontWeight: '700' },
+  sharingChevron: { fontSize: 20, fontWeight: '900' },
+  sharingContent: { borderTopWidth: 1, padding: Spacing.three, gap: Spacing.four },
   entry: { borderWidth: 1, borderRadius: Radius.medium, padding: 13, gap: 7 },
   entryTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
   entryValue: { fontSize: 14, fontWeight: '900' },

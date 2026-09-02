@@ -7,7 +7,7 @@
 ## 현재 구현
 
 - Expo 57 + React Native + TypeScript 앱, 시스템·라이트·다크 테마
-- 첫 계정만 허용하는 개인 로그인, bcrypt 비밀번호 해시, 30일 불투명 세션과 Android 보안 저장소
+- 최초 소유자 등록 후 운영자 화면에서 테스트 계정을 추가할 수 있는 개인 로그인, bcrypt 비밀번호 해시, 30일 불투명 세션과 Android 보안 저장소
 - Kakao 도서 검색·Google Books 전체 페이지 수 보강·ISBN 카메라 스캔·직접 등록과 로컬 폴백
 - 종이책·전자책·오디오북, 검색·상태 필터·정렬·회차 제거를 갖춘 다권 책장, 5개 독서 상태와 재독 회차
 - 진척·메모·재실행 복원·일시정지·초기화를 지원하는 타이머, 과거 기록, 네이티브 SQLite 오프라인 큐와 멱등 재전송
@@ -51,7 +51,7 @@ EXPO_PUBLIC_API_URL=http://192.168.0.10:8080
 
 ## 개인 서버 설정
 
-기본 모드는 Supabase 없이 한 명만 가입할 수 있는 개인 계정이다. 개발 사용자 우회 헤더는 기본적으로 꺼져 있다.
+기본 모드는 Supabase 없이 로컬 자격 증명을 쓰는 개인 서버 계정이다. 최초 소유자 등록 후 공개 가입은 자동으로 닫히며, 필요한 테스트 계정은 운영 센터에서 추가한다. 개발 사용자 우회 헤더는 기본적으로 꺼져 있다.
 
 ```dotenv
 ALLOW_DEV_AUTH=false
@@ -72,7 +72,7 @@ EXPO_PUBLIC_APP_LINK_DOMAIN=links.example.com
 
 휴대폰과 PC는 Tailscale에 연결하고 `EXPO_PUBLIC_API_URL`에는 `tailscale serve`의 HTTPS 주소를 사용한다. Funnel은 필요하지 않다. Expo/EAS projectId와 APNs·FCM 자격 증명이 있어야 실제 기기 푸시 토큰이 발급된다. Kakao REST API 키와 DB 접속 문자열은 앱 번들에 넣지 않는다. `EXPO_PUSH_URL`이 비어 있으면 Worker는 전달 대상을 큐에 만들지만 외부로 발송하지 않는다.
 
-App Links와 푸시는 Expo Go가 아닌 development build 또는 배포 빌드에서 검증한다. 비밀번호 원문은 저장하지 않으며 앱 세션은 Android Keystore 기반 SecureStore에, 서버에는 토큰의 SHA-256 해시만 저장한다. 계정을 삭제하면 서비스 데이터·자격 증명·세션이 함께 삭제되어 다시 최초 가입이 가능해진다.
+App Links와 푸시는 Expo Go가 아닌 development build 또는 배포 빌드에서 검증한다. 비밀번호 원문은 저장하지 않으며 앱 세션은 Android Keystore 기반 SecureStore에, 서버에는 토큰의 SHA-256 해시만 저장한다. 계정을 삭제하면 해당 계정의 서비스 데이터·자격 증명·세션이 함께 삭제된다.
 
 로컬 운영 센터는 `http://localhost:8080/admin`이다. 운영 현황, API 요청 실시간 로그, 신고 큐와 감사 기록을 한 화면에서 확인한다. 실시간 로그는 현재 API 프로세스의 최근 1,000건만 메모리에 보관하고 재시작 시 초기화되므로, 장기 보관은 `stdout` 수집 시스템을 별도로 연결한다. `ADMIN_API_KEY`는 브라우저 탭 세션에만 보관하며 URL이나 로그에 포함하지 않는다. 운영에서는 이 경로를 IAP/SSO 또는 제한된 네트워크 뒤에 둔다. HTTPS 초대 링크에 필요한 도메인 파일은 `deploy/app-links` 템플릿을 사용한다.
 

@@ -5,12 +5,12 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, 
 import { BookCover } from '@/components/product/book-cover';
 import { ProgressBar } from '@/components/product/progress-bar';
 import { Screen } from '@/components/product/screen';
-import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Radius, Spacing } from '@/constants/theme';
 import { useFeedback } from '@/features/feedback/feedback-provider';
-import { useDeleteReadingRun, useReadingRuns, useUpdateReadingRun } from '@/features/reading/hooks';
+import { useReadingRuns, useUpdateReadingRun } from '@/features/reading/hooks';
 import { useTheme } from '@/hooks/use-theme';
+import { nextReadingSelectionRequest } from '@/lib/navigation';
 import type { ReadingRun } from '@/types/domain';
 
 const filters: { value: 'all' | ReadingRun['status']; label: string }[] = [
@@ -46,9 +46,7 @@ export default function LibraryScreen() {
   const [filter, setFilter] = useState<'all' | ReadingRun['status']>(initial ?? 'all');
   const [query, setQuery] = useState('');
   const [sortOrder, setSortOrder] = useState<SortOrder>('recent');
-  const [deleteTarget, setDeleteTarget] = useState<ReadingRun | null>(null);
   const runs = useReadingRuns();
-  const remove = useDeleteReadingRun();
   const update = useUpdateReadingRun();
   const items = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase('ko-KR');
@@ -62,28 +60,12 @@ export default function LibraryScreen() {
       });
   }, [filter, query, runs.data, sortOrder]);
 
-  const deleteSelectedRun = async () => {
-    if (!deleteTarget) return;
-    const target = deleteTarget;
-    try {
-      await remove.mutateAsync(target.id);
-      setDeleteTarget(null);
-      feedback.showSuccess('책장에서 삭제했어요', `「${target.title}」의 독서 회차와 기록을 삭제했습니다.`);
-    } catch (error) {
-      setDeleteTarget(null);
-      feedback.showError('책을 삭제하지 못했어요', error, {
-        label: '다시 시도',
-        onPress: () => setDeleteTarget(target),
-      });
-    }
-  };
-
   const openRecord = async (run: ReadingRun) => {
     try {
       if (run.status === 'want_to_read' || run.status === 'paused') {
         await update.mutateAsync({ readingRunID: run.id, input: { status: 'reading' } });
       }
-      router.push({ pathname: '/record', params: { runID: run.id } });
+      router.push({ pathname: '/record', params: { runID: run.id, selectionRequest: nextReadingSelectionRequest() } });
     } catch (error) {
       feedback.showError('읽기를 시작하지 못했어요', error, {
         label: '다시 시도',
@@ -189,7 +171,7 @@ export default function LibraryScreen() {
               accessibilityLabel={`${run.title} 상세 보기`}
               onPress={() => router.push({ pathname: '/book/[runID]', params: { runID: run.id } })}
               style={({ pressed }) => [styles.cardMain, { opacity: pressed ? 0.68 : 1 }]}>
-              <BookCover title={run.title} color={run.coverColor} />
+              <BookCover title={run.title} color={run.coverColor} coverUrl={run.coverUrl} />
               <View style={styles.bookInfo}>
                 <View style={styles.statusRow}>
                   <Text style={[styles.status, { color: theme.primary }]}>{statusLabel[run.status]}</Text>
@@ -202,8 +184,8 @@ export default function LibraryScreen() {
               </View>
               <Text style={[styles.chevron, { color: theme.textSecondary }]}>›</Text>
             </Pressable>
-            <View style={styles.cardActions}>
-              {run.status === 'want_to_read' || run.status === 'reading' || run.status === 'paused' ? (
+            {run.status === 'want_to_read' || run.status === 'reading' || run.status === 'paused' ? (
+              <View style={styles.cardActions}>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`${run.title} ${run.status === 'want_to_read' ? '읽기 시작' : run.status === 'paused' ? '계속 읽기' : '기록하기'}`}
@@ -224,19 +206,8 @@ export default function LibraryScreen() {
                           : '기록'}
                   </Text>
                 </Pressable>
-              ) : null}
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`${run.title} 책장에서 삭제`}
-                disabled={remove.isPending}
-                onPress={() => setDeleteTarget(run)}
-                style={({ pressed }) => [
-                  styles.cardDelete,
-                  { backgroundColor: theme.backgroundElement, opacity: pressed || remove.isPending ? 0.55 : 1 },
-                ]}>
-                <Text style={[styles.cardDeleteText, { color: theme.accent }]}>삭제</Text>
-              </Pressable>
-            </View>
+              </View>
+            ) : null}
           </View>
         ))}
         {runs.isFetching && !runs.data ? <ActivityIndicator accessibilityLabel="책장 불러오는 중" color={theme.primary} style={styles.loader} /> : null}
@@ -253,15 +224,6 @@ export default function LibraryScreen() {
           </View>
         ) : null}
       </View>
-      <ConfirmDialog
-        visible={Boolean(deleteTarget)}
-        title="책장에서 삭제할까요?"
-        message={deleteTarget ? `「${deleteTarget.title}」의 진척 기록과 공유된 독서 소식이 함께 삭제됩니다. 이 작업은 되돌릴 수 없어요.` : ''}
-        confirmLabel="삭제"
-        pending={remove.isPending}
-        onCancel={() => setDeleteTarget(null)}
-        onConfirm={() => void deleteSelectedRun()}
-      />
     </Screen>
   );
 }
@@ -300,8 +262,6 @@ const styles = StyleSheet.create({
   cardActions: { gap: 7 },
   cardQuickAction: { minWidth: 48, minHeight: 44, borderRadius: Radius.small, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 9 },
   cardQuickActionText: { fontSize: 11, fontWeight: '900' },
-  cardDelete: { minWidth: 48, minHeight: 44, borderRadius: Radius.small, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 9 },
-  cardDeleteText: { fontSize: 11, fontWeight: '900' },
   empty: { borderRadius: Radius.large, padding: Spacing.five, alignItems: 'center', gap: 14 },
   emptyTitle: { fontSize: 16, fontWeight: '900', textAlign: 'center' },
   emptyCopy: { fontSize: 13, lineHeight: 19, textAlign: 'center' },

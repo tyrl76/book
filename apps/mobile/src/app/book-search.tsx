@@ -11,6 +11,7 @@ import { useBookSearch, useBookSuggestions, useCreateReadingRun } from '@/featur
 import { useReadingRuns, useUpdateReadingRun } from '@/features/reading/hooks';
 import { useTheme } from '@/hooks/use-theme';
 import { ApiError } from '@/lib/api';
+import { nextReadingSelectionRequest } from '@/lib/navigation';
 import { addRecentSearch, clearRecentSearches, loadRecentSearches, removeRecentSearch } from '@/lib/recent-searches';
 import type { Book, ReadingRun } from '@/types/domain';
 
@@ -72,7 +73,10 @@ export default function BookSearchScreen() {
       if (run.status !== 'reading') {
         await update.mutateAsync({ readingRunID: run.id, input: { status: 'reading' } });
       }
-      router.dismissTo({ pathname: '/record', params: { runID: run.id } });
+      router.dismissTo({
+        pathname: '/record',
+        params: { runID: run.id, selectionRequest: nextReadingSelectionRequest() },
+      });
     } catch (error) {
       feedback.showError('읽기를 시작하지 못했어요', error, {
         label: '다시 시도',
@@ -88,7 +92,7 @@ export default function BookSearchScreen() {
     status: Extract<ReadingRun['status'], 'reading' | 'want_to_read' | 'finished'>,
   ) => {
     try {
-      await create.mutateAsync({ isbn, totalValue, progressBasis, status });
+      const createdRun = await create.mutateAsync({ isbn, totalValue, progressBasis, status });
       const isReading = status === 'reading';
       const isImported = status === 'finished';
       feedback.showSuccess(
@@ -98,7 +102,15 @@ export default function BookSearchScreen() {
           : isImported
             ? '과거 독서 이력으로 저장해 오늘 통계와 피드에는 포함하지 않았어요.'
             : '내 책장에서 언제든 읽기를 시작할 수 있어요.',
-        { label: isReading ? '기록하기' : '책장 보기', onPress: () => router.dismissTo(isReading ? '/record' : '/library') },
+        {
+          label: isReading ? '기록하기' : '책장 보기',
+          onPress: () => isReading
+            ? router.dismissTo({
+              pathname: '/record',
+              params: { runID: createdRun.id, selectionRequest: nextReadingSelectionRequest() },
+            })
+            : router.dismissTo('/library'),
+        },
       );
     } catch (error) {
       const message = error instanceof ApiError && error.status === 409 ? '이미 책장에 등록된 책입니다.' : error instanceof Error ? error.message : '책을 추가하지 못했습니다.';
@@ -134,12 +146,15 @@ export default function BookSearchScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="검색어 지우기"
+            accessibilityHint="입력한 검색어를 모두 지웁니다"
+            hitSlop={4}
             onPress={() => {
               setQuery('');
               setDebouncedQuery('');
               setSubmittedQuery('');
               setSuggestionsVisible(false);
-            }}>
+            }}
+            style={({ pressed }) => [styles.clearButton, { opacity: pressed ? 0.56 : 1 }]}>
             <Text style={[styles.clear, { color: theme.textSecondary }]}>×</Text>
           </Pressable>
         ) : null}
@@ -292,7 +307,8 @@ const styles = StyleSheet.create({
   searchBox: { height: 54, borderRadius: 16, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, gap: 9 },
   searchIcon: { fontSize: 24, fontWeight: '800' },
   input: { flex: 1, fontSize: 16 },
-  clear: { fontSize: 27, paddingHorizontal: 3 },
+  clearButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  clear: { fontSize: 27, lineHeight: 30 },
   suggestions: { marginTop: -18, borderWidth: 1, borderRadius: 16, overflow: 'hidden' },
   suggestion: { minHeight: 50, paddingHorizontal: 16, justifyContent: 'center' },
   suggestionValue: { fontSize: 14, fontWeight: '800' },

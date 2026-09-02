@@ -73,7 +73,12 @@ func (s *Store) ListFeed(ctx context.Context, userID string, limit int) ([]api.F
 	rows, err := s.pool.Query(ctx, `
 		SELECT fe.id::text, fe.actor_id::text, p.nickname, w.title, w.author,
 		       COALESCE(e.cover_url, ''), w.cover_color, fe.type,
-		       pe.new_normalized_progress, COALESCE(fe.note, ''),
+		       CASE
+		           WHEN fe.actor_id = $1::uuid THEN pe.new_normalized_progress
+		           WHEN rr.progress_precision = 'hidden' THEN -1
+		           WHEN rr.progress_precision = 'milestone' THEN (pe.new_normalized_progress / 2500) * 2500
+		           ELSE pe.new_normalized_progress
+		       END, COALESCE(fe.note, ''),
 		       (SELECT COUNT(*)::int FROM reactions r
 		        WHERE r.feed_event_id = fe.id
 		          AND NOT EXISTS (

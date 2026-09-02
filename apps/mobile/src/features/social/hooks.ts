@@ -11,7 +11,7 @@ import {
   setFeedReaction,
   setUserBlocked,
 } from '@/lib/api';
-import type { FeedComment } from '@/types/domain';
+import type { FeedComment, FeedEvent } from '@/types/domain';
 
 export function useFriends() {
   return useQuery({ queryKey: ['friends'], queryFn: fetchFriends });
@@ -63,8 +63,27 @@ export function useBlockUser() {
 export function useFeedReaction() {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: ['feed-reaction'],
     mutationFn: ({ eventID, active }: { eventID: string; active: boolean }) => setFeedReaction(eventID, active),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['feed'] }),
+    onMutate: async ({ eventID, active }) => {
+      await queryClient.cancelQueries({ queryKey: ['feed'] });
+      const snapshots = queryClient.getQueriesData<FeedEvent[]>({ queryKey: ['feed'] });
+      queryClient.setQueriesData<FeedEvent[]>({ queryKey: ['feed'] }, (events) => events?.map((event) => {
+        if (event.id !== eventID || event.reactedByViewer === active) return event;
+        return {
+          ...event,
+          reactedByViewer: active,
+          reactionCount: Math.max(0, event.reactionCount + (active ? 1 : -1)),
+        };
+      }));
+      return { snapshots };
+    },
+    onError: (_error, _variables, context) => {
+      for (const [queryKey, events] of context?.snapshots ?? []) {
+        queryClient.setQueryData(queryKey, events);
+      }
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['feed'] }),
   });
 }
 

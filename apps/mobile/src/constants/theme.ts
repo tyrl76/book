@@ -16,7 +16,7 @@ export const Colors = {
     textSecondary: '#6D695F',
     primary: '#42624C',
     primarySoft: '#DCE8DD',
-    accent: '#B65D48',
+    accent: '#AE5744',
     border: '#E1DACD',
     card: '#FFFCF6',
     warning: '#9A6A2F',

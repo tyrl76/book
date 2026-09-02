@@ -8,24 +8,82 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useAnnualGoal, useReadingStats } from '@/features/account/hooks';
 import { useFeedback } from '@/features/feedback/feedback-provider';
 import { useTheme } from '@/hooks/use-theme';
+import type { DailyReading } from '@/types/domain';
+
+const recentDayCount = 35;
+const millisecondsPerDay = 24 * 60 * 60 * 1000;
+const seoulOffsetMilliseconds = 9 * 60 * 60 * 1000;
 
 function durationLabel(seconds: number) {
   const minutes = Math.round(seconds / 60);
   return minutes < 60 ? `${minutes}분` : `${Math.floor(minutes / 60)}시간 ${minutes % 60}분`;
 }
 
+// The API groups reading activity using Asia/Seoul calendar dates. Building the
+// key from the UTC timestamp plus Korea's fixed offset avoids device-timezone
+// and local daylight-saving boundaries changing which day is considered today.
+function seoulDateKey(value = new Date()) {
+  return new Date(value.getTime() + seoulOffsetMilliseconds).toISOString().slice(0, 10);
+}
+
+function shiftDateKey(dateKey: string, days: number) {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day) + days * millisecondsPerDay).toISOString().slice(0, 10);
+}
+
+function recentCalendarDays(items: DailyReading[], today: string) {
+  const activityByDate = new Map<string, DailyReading>();
+  for (const item of items) {
+    const previous = activityByDate.get(item.date);
+    activityByDate.set(item.date, previous ? {
+      date: item.date,
+      pages: previous.pages + item.pages,
+      durationSeconds: previous.durationSeconds + item.durationSeconds,
+      entries: previous.entries + item.entries,
+    } : item);
+  }
+
+  return Array.from({ length: recentDayCount }, (_, index) => {
+    const date = shiftDateKey(today, index - recentDayCount + 1);
+    return activityByDate.get(date) ?? { date, pages: 0, durationSeconds: 0, entries: 0 };
+  });
+}
+
+function dayAccessibilityLabel(day: DailyReading) {
+  const details: string[] = [];
+  if (day.pages > 0) details.push(`${Math.round(day.pages)}쪽`);
+  if (day.durationSeconds > 0) details.push(`${Math.max(1, Math.round(day.durationSeconds / 60))}분`);
+  if (day.entries > 0) details.push(`${day.entries}번 기록`);
+  return `${day.date}, ${details.length ? details.join(', ') : '독서 기록 없음'}`;
+}
+
 export default function StatsScreen() {
   const theme = useTheme();
   const feedback = useFeedback();
-  const year = new Date().getFullYear();
+  const today = seoulDateKey();
+  const year = Number(today.slice(0, 4));
+  const calendarStartYear = Number(shiftDateKey(today, 1 - recentDayCount).slice(0, 4));
+  const crossesYearBoundary = calendarStartYear !== year;
   const stats = useReadingStats(year);
+  // React Query shares this request with `stats` unless the 35-day window
+  // crosses New Year, when the previous year's final days are also required.
+  const boundaryStats = useReadingStats(calendarStartYear);
   const goal = useAnnualGoal(year);
   const [target, setTarget] = useState<string | null>(null);
-  const targetValue = Number(target ?? stats.data?.annualGoalBooks ?? 12);
+  const savedTarget = stats.data?.annualGoalBooks ?? 0;
+  const displayedTarget = savedTarget > 0 ? savedTarget : 12;
+  const targetValue = Number(target ?? displayedTarget);
   const targetValid = Number.isInteger(targetValue) && targetValue >= 1 && targetValue <= 1000;
   const goalProgress = targetValue > 0 ? Math.min(100, ((stats.data?.annualFinishedBooks ?? 0) / targetValue) * 100) : 0;
-  const days = stats.data?.calendar.slice(-35) ?? [];
+  const calendarItems = crossesYearBoundary
+    ? [...(boundaryStats.data?.calendar ?? []), ...(stats.data?.calendar ?? [])]
+    : (stats.data?.calendar ?? []);
+  const days = recentCalendarDays(calendarItems, today);
+  const hasCalendarActivity = days.some((day) => day.pages > 0 || day.durationSeconds > 0 || day.entries > 0);
   const maxPages = Math.max(1, ...days.map((day) => day.pages));
+  const maxDuration = Math.max(1, ...days.map((day) => day.durationSeconds));
+  const maxEntries = Math.max(1, ...days.map((day) => day.entries));
+  const statsError = stats.error ?? (crossesYearBoundary ? boundaryStats.error : null);
 
   const saveGoal = async () => {
     if (!targetValid) return;
@@ -46,8 +104,15 @@ export default function StatsScreen() {
         <Text style={[styles.copy, { color: theme.textSecondary }]}>경쟁 순위 없이 나의 독서 리듬만 차분하게 확인합니다.</Text>
       </View>
 
-      {stats.isError ? (
-        <FeedbackBanner title="독서 통계를 불러오지 못했어요" error={stats.error} onAction={() => void stats.refetch()} />
+      {statsError ? (
+        <FeedbackBanner
+          title="독서 통계를 불러오지 못했어요"
+          error={statsError}
+          onAction={() => {
+            void stats.refetch();
+            if (crossesYearBoundary) void boundaryStats.refetch();
+          }}
+        />
       ) : null}
 
       <View style={[styles.goalCard, { backgroundColor: theme.primarySoft, borderColor: theme.border }]}>
@@ -61,7 +126,7 @@ export default function StatsScreen() {
               accessibilityLabel="연간 완독 목표 권수"
               keyboardType="numeric"
               selectTextOnFocus
-              value={String(target ?? stats.data?.annualGoalBooks ?? 12)}
+              value={String(target ?? displayedTarget)}
               onChangeText={setTarget}
               style={[styles.goalInput, { color: theme.text, backgroundColor: theme.card, borderColor: targetValid ? theme.border : theme.accent }]}
             />
@@ -90,19 +155,36 @@ export default function StatsScreen() {
       <View style={styles.section}>
         <View style={styles.sectionHeading}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>최근 독서 달력</Text>
-          <Text style={[styles.sectionMeta, { color: theme.textSecondary }]}>최근 기록 35일</Text>
+          <Text style={[styles.sectionMeta, { color: theme.textSecondary }]}>오늘까지 35일</Text>
         </View>
         <View style={[styles.calendar, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          {days.length ? days.map((day) => {
-            const strength = Math.max(0.18, day.pages / maxPages);
+          {days.map((day) => {
+            const active = day.pages > 0 || day.durationSeconds > 0 || day.entries > 0;
+            const activityRatio = Math.max(
+              day.pages / maxPages,
+              day.durationSeconds / maxDuration,
+              day.entries / maxEntries,
+            );
+            const strength = 0.22 + activityRatio * 0.78;
+            const isToday = day.date === today;
             return (
-              <View key={day.date} accessibilityLabel={`${day.date}, ${Math.round(day.pages)}쪽`} style={styles.dayWrap}>
-                <View style={[styles.day, { backgroundColor: theme.primary, opacity: strength }]} />
-                <Text style={[styles.dayLabel, { color: theme.textSecondary }]}>{day.date.slice(8)}</Text>
+              <View key={day.date} accessibilityLabel={dayAccessibilityLabel(day)} style={styles.dayWrap}>
+                <View style={[
+                  styles.day,
+                  {
+                    backgroundColor: active ? theme.primary : theme.backgroundElement,
+                    borderColor: isToday ? theme.primary : 'transparent',
+                    opacity: active ? strength : 1,
+                  },
+                ]} />
+                <Text style={[styles.dayLabel, { color: isToday ? theme.primary : theme.textSecondary }]}>
+                  {day.date.slice(5).replace('-', '.')}
+                </Text>
               </View>
             );
-          }) : <Text style={[styles.empty, { color: theme.textSecondary }]}>독서 기록을 남기면 여기에 리듬이 쌓여요.</Text>}
+          })}
         </View>
+        {!hasCalendarActivity ? <Text style={[styles.empty, { color: theme.textSecondary }]}>독서 기록을 남기면 여기에 리듬이 쌓여요.</Text> : null}
       </View>
     </Screen>
   );
@@ -143,9 +225,9 @@ const styles = StyleSheet.create({
   sectionHeading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
   sectionTitle: { fontSize: 18, fontWeight: '900' },
   sectionMeta: { fontSize: 11, fontWeight: '700' },
-  calendar: { minHeight: 120, borderWidth: 1, borderRadius: Radius.large, padding: Spacing.three, flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
-  dayWrap: { width: 29, alignItems: 'center', gap: 3 },
-  day: { width: 25, height: 25, borderRadius: 7 },
+  calendar: { minHeight: 216, borderWidth: 1, borderRadius: Radius.large, padding: Spacing.three, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' },
+  dayWrap: { width: '14.285%', alignItems: 'center', gap: 3, paddingVertical: 4 },
+  day: { width: 25, height: 25, borderWidth: 1, borderRadius: 7 },
   dayLabel: { fontSize: 8, fontWeight: '700' },
   empty: { width: '100%', textAlign: 'center', fontSize: 12 },
 });

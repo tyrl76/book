@@ -7,6 +7,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useCreateManualReadingRun } from '@/features/catalog/hooks';
 import { useFeedback } from '@/features/feedback/feedback-provider';
 import { useTheme } from '@/hooks/use-theme';
+import { nextReadingSelectionRequest } from '@/lib/navigation';
 import type { ReadingRun } from '@/types/domain';
 
 const basisOptions: { value: ReadingRun['progressBasis']; label: string; unit: string }[] = [
@@ -35,13 +36,21 @@ export default function ManualBookScreen() {
   const save = async () => {
     if (!valid) return;
     try {
-      await create.mutateAsync({ title: title.trim(), author: author.trim(), totalValue, progressBasis: basis, status });
+      const createdRun = await create.mutateAsync({ title: title.trim(), author: author.trim(), totalValue, progressBasis: basis, status });
       const isReading = status === 'reading';
       const isImported = status === 'finished';
       feedback.showSuccess(
         isReading ? '읽는 책에 추가했어요' : isImported ? '읽은 책으로 등록했어요' : '읽고 싶은 책에 담았어요',
         isImported ? '과거 독서 이력으로 저장해 오늘 통계와 피드에는 포함하지 않았어요.' : undefined,
-        { label: isReading ? '기록하기' : '책장 보기', onPress: () => router.dismissTo(isReading ? '/record' : '/library') },
+        {
+          label: isReading ? '기록하기' : '책장 보기',
+          onPress: () => isReading
+            ? router.dismissTo({
+              pathname: '/record',
+              params: { runID: createdRun.id, selectionRequest: nextReadingSelectionRequest() },
+            })
+            : router.dismissTo('/library'),
+        },
       );
     } catch (error) {
       feedback.showError('책을 등록하지 못했어요', error, { label: '다시 시도', onPress: () => void save() });

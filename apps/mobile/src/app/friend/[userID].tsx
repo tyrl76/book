@@ -1,9 +1,11 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BookCover } from '@/components/product/book-cover';
 import { ProgressBar } from '@/components/product/progress-bar';
 import { Screen } from '@/components/product/screen';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Radius, Spacing } from '@/constants/theme';
 import { useFeedback } from '@/features/feedback/feedback-provider';
@@ -22,6 +24,14 @@ const activityCopy: Record<FeedEvent['type'], string> = {
   shared_note: '감상 공유',
 };
 
+function visibleActivityCopy(item: FeedEvent) {
+  if (item.normalizedProgress >= 0) return activityCopy[item.type];
+  if (item.type === 'started') return '읽기 시작';
+  if (item.type === 'finished') return '완독';
+  if (item.type === 'shared_note') return '감상 공유';
+  return '독서 중';
+}
+
 function activityDate(value: string) {
   return new Intl.DateTimeFormat('ko-KR', { month: 'short', day: 'numeric' }).format(new Date(value));
 }
@@ -36,6 +46,7 @@ export default function FriendDetailScreen() {
   const reaction = useFeedReaction();
   const remove = useRemoveFriend();
   const block = useBlockUser();
+  const [relationshipAction, setRelationshipAction] = useState<'remove' | 'block' | null>(null);
   const friend = friends.data?.find((item) => item.userId === userID);
   const activities = (feed.data ?? []).filter((item) => item.actorId === userID);
   const sharedBookCount = new Set(activities.map((item) => `${item.title}\u0000${item.author}`)).size;
@@ -45,30 +56,19 @@ export default function FriendDetailScreen() {
     ? (runs.data ?? []).find((item) => item.title.trim().toLocaleLowerCase() === friend.currentTitle?.trim().toLocaleLowerCase())
     : undefined;
 
-  const confirmRelationship = (action: 'remove' | 'block') => {
-    if (!friend) return;
-    Alert.alert(
-      action === 'block' ? `${friend.nickname}님을 차단할까요?` : `${friend.nickname}님과의 연결을 끊을까요?`,
-      action === 'block' ? '서로의 피드와 댓글이 보이지 않게 됩니다.' : '다시 연결하려면 새 초대가 필요합니다.',
-      [
-        { text: '취소', style: 'cancel' },
-        {
-          text: action === 'block' ? '차단' : '연결 끊기',
-          style: 'destructive',
-          onPress: () => {
-            const options = {
-              onSuccess: () => {
-                feedback.showSuccess(action === 'block' ? `${friend.nickname}님을 차단했어요` : `${friend.nickname}님과의 연결을 끊었어요`);
-                router.replace('/people');
-              },
-              onError: (error: Error) => feedback.showError(action === 'block' ? '차단하지 못했어요' : '연결을 끊지 못했어요', error),
-            };
-            if (action === 'block') block.mutate({ userID: friend.userId, active: true }, options);
-            else remove.mutate(friend.userId, options);
-          },
-        },
-      ],
-    );
+  const applyRelationshipAction = async () => {
+    if (!friend || !relationshipAction || remove.isPending || block.isPending) return;
+    const action = relationshipAction;
+    try {
+      if (action === 'block') await block.mutateAsync({ userID: friend.userId, active: true });
+      else await remove.mutateAsync(friend.userId);
+      setRelationshipAction(null);
+      feedback.showSuccess(action === 'block' ? `${friend.nickname}님을 차단했어요` : `${friend.nickname}님과의 연결을 끊었어요`);
+      router.replace('/people');
+    } catch (error) {
+      setRelationshipAction(null);
+      feedback.showError(action === 'block' ? '차단하지 못했어요' : '연결을 끊지 못했어요', error);
+    }
   };
 
   if ((friends.isFetching && !friends.data) || (feed.isFetching && !feed.data)) {
@@ -76,6 +76,26 @@ export default function FriendDetailScreen() {
       <Screen contentContainerStyle={styles.centered}>
         <ActivityIndicator color={theme.primary} />
         <Text style={[styles.loadingText, { color: theme.textSecondary }]}>친구의 독서 흐름을 불러오는 중…</Text>
+      </Screen>
+    );
+  }
+
+  if (friends.isError && !friends.data) {
+    return (
+      <Screen contentContainerStyle={styles.centered}>
+        <Stack.Screen options={{ title: '친구 독서 프로필' }} />
+        <FeedbackBanner
+          title="친구 정보를 불러오지 못했어요"
+          error={friends.error}
+          onAction={() => void friends.refetch()}
+        />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="친구 탭으로 이동"
+          onPress={() => router.replace('/people')}
+          style={[styles.primaryButton, { backgroundColor: theme.primary }]}>
+          <Text style={[styles.primaryButtonText, { color: theme.inverse }]}>친구 탭으로 이동</Text>
+        </Pressable>
       </Screen>
     );
   }
@@ -173,25 +193,34 @@ export default function FriendDetailScreen() {
           <View key={item.id} style={[styles.activityCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <View style={styles.activityTop}>
               <View style={[styles.activityBadge, { backgroundColor: theme.primarySoft }]}>
-                <Text style={[styles.activityBadgeText, { color: theme.primary }]}>{activityCopy[item.type]}</Text>
+                <Text style={[styles.activityBadgeText, { color: theme.primary }]}>{visibleActivityCopy(item)}</Text>
               </View>
               <Text style={[styles.activityDate, { color: theme.textSecondary }]}>{activityDate(item.occurredAt)}</Text>
             </View>
             <View style={styles.bookRow}>
-              <BookCover title={item.title} color={item.coverColor} small />
+              <BookCover title={item.title} color={item.coverColor} coverUrl={item.coverUrl} small />
               <View style={styles.bookCopy}>
                 <Text numberOfLines={2} style={[styles.bookTitle, { color: theme.text }]}>{item.title}</Text>
                 <Text numberOfLines={1} style={[styles.author, { color: theme.textSecondary }]}>{item.author}</Text>
-                <ProgressBar value={item.normalizedProgress / 100} />
-                <Text style={[styles.progressText, { color: theme.primary }]}>{Math.round(item.normalizedProgress / 100)}%</Text>
+                {item.normalizedProgress >= 0 ? (
+                  <>
+                    <ProgressBar value={item.normalizedProgress / 100} />
+                    <Text style={[styles.progressText, { color: theme.primary }]}>{Math.round(item.normalizedProgress / 100)}%</Text>
+                  </>
+                ) : (
+                  <Text style={[styles.progressText, { color: theme.textSecondary }]}>진척도 비공개</Text>
+                )}
               </View>
             </View>
             {item.note ? <Text style={[styles.note, { color: theme.text, backgroundColor: theme.backgroundElement }]}>“{item.note}”</Text> : null}
             <View style={[styles.activityActions, { borderTopColor: theme.border }]}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityState={{ selected: item.reactedByViewer, disabled: reaction.isPending }}
-                disabled={reaction.isPending}
+                accessibilityState={{
+                  selected: item.reactedByViewer,
+                  disabled: reaction.isPending && reaction.variables?.eventID === item.id,
+                }}
+                disabled={reaction.isPending && reaction.variables?.eventID === item.id}
                 onPress={() => {
                   const input = { eventID: item.id, active: !item.reactedByViewer };
                   reaction.mutate(input, { onError: (error) => feedback.showError('응원을 반영하지 못했어요', error) });
@@ -216,13 +245,23 @@ export default function FriendDetailScreen() {
       </View>
 
       <View style={styles.manageSection}>
-        <Pressable accessibilityRole="button" onPress={() => confirmRelationship('remove')} style={[styles.manageButton, { borderColor: theme.border }]}>
+        <Pressable accessibilityRole="button" onPress={() => setRelationshipAction('remove')} style={[styles.manageButton, { borderColor: theme.border }]}>
           <Text style={[styles.manageText, { color: theme.textSecondary }]}>친구 연결 끊기</Text>
         </Pressable>
-        <Pressable accessibilityRole="button" onPress={() => confirmRelationship('block')} style={[styles.manageButton, { borderColor: theme.border }]}>
+        <Pressable accessibilityRole="button" onPress={() => setRelationshipAction('block')} style={[styles.manageButton, { borderColor: theme.border }]}>
           <Text style={[styles.manageText, { color: theme.accent }]}>차단하기</Text>
         </Pressable>
       </View>
+      <ConfirmDialog
+        visible={Boolean(relationshipAction)}
+        title={relationshipAction === 'block' ? `${friend.nickname}님을 차단할까요?` : `${friend.nickname}님과의 연결을 끊을까요?`}
+        message={relationshipAction === 'block' ? '서로의 피드와 댓글이 보이지 않게 됩니다.' : '다시 연결하려면 새 초대가 필요합니다.'}
+        confirmLabel={relationshipAction === 'block' ? '차단' : '연결 끊기'}
+        pending={remove.isPending || block.isPending}
+        pendingLabel={relationshipAction === 'block' ? '차단 중…' : '연결 끊는 중…'}
+        onCancel={() => setRelationshipAction(null)}
+        onConfirm={() => void applyRelationshipAction()}
+      />
     </Screen>
   );
 }

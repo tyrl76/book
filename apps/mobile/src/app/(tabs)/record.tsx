@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
 import { BookCover } from '@/components/product/book-cover';
@@ -68,8 +68,9 @@ function restoreReadingTimer(userID: string | null): StoredReadingTimer | null {
 export default function RecordScreen() {
   const theme = useTheme();
   const feedback = useFeedback();
-  const params = useLocalSearchParams<{ runID?: string }>();
+  const params = useLocalSearchParams<{ runID?: string; selectionRequest?: string }>();
   const requestedRunID = Array.isArray(params.runID) ? params.runID[0] : params.runID;
+  const selectionRequest = Array.isArray(params.selectionRequest) ? params.selectionRequest[0] : params.selectionRequest;
   const { width } = useWindowDimensions();
   const compact = width < 520;
   const { userID } = useAuth();
@@ -80,8 +81,11 @@ export default function RecordScreen() {
   const presence = useReadingPresence();
   const record = useRecordProgress();
   const [restoredTimer] = useState<StoredReadingTimer | null>(() => restoreReadingTimer(userID));
-  const activeRuns = (runs.data ?? []).filter((run) => run.status === 'reading' || run.status === 'paused');
-  const [selectedRunID, setSelectedRunID] = useState<string | null>(restoredTimer?.readingRunID ?? requestedRunID ?? null);
+  const restoredTimerHasElapsed = Boolean(restoredTimer && (restoredTimer.startedAt !== null || restoredTimer.accumulatedSeconds > 0));
+  const activeRuns = (runs.data ?? []).filter((run) => run.status === 'reading');
+  const [selectedRunID, setSelectedRunID] = useState<string | null>(
+    restoredTimerHasElapsed ? restoredTimer?.readingRunID ?? null : requestedRunID ?? restoredTimer?.readingRunID ?? null,
+  );
   const currentRun = activeRuns.find((run) => run.id === selectedRunID) ?? activeRuns[0];
   const [draftValue, setDraftValue] = useState<string | null>(null);
   const [note, setNote] = useState('');
@@ -90,16 +94,53 @@ export default function RecordScreen() {
   const [timerAccumulated, setTimerAccumulated] = useState(restoredTimer?.accumulatedSeconds ?? 0);
   const [timerNow, setTimerNow] = useState(() => Date.now());
   const [confirmation, setConfirmation] = useState<RecordConfirmation | null>(null);
+  const handledSelectionRequest = useRef<string | null>(null);
   const timerAppliesToCurrentRun = Boolean(currentRun && currentRun.id === timerRunID);
   const activeTimerStartedAt = timerAppliesToCurrentRun ? timerStartedAt : null;
   const activeTimerAccumulated = timerAppliesToCurrentRun ? timerAccumulated : 0;
+
+  useEffect(() => {
+    if (!requestedRunID || !runs.data) return;
+    const requestedRunIsActive = runs.data.some(
+      (run) => run.id === requestedRunID && run.status === 'reading',
+    );
+    if (!requestedRunIsActive) return;
+
+    const requestKey = `${requestedRunID}:${selectionRequest ?? 'initial'}`;
+    if (handledSelectionRequest.current === requestKey) return;
+    handledSelectionRequest.current = requestKey;
+
+    if (requestedRunID === currentRun?.id) return;
+    const timerRunIsActive = Boolean(timerRunID && runs.data.some(
+      (run) => run.id === timerRunID && run.status === 'reading',
+    ));
+    const hasUnsavedTimer = timerRunIsActive && (timerStartedAt !== null || timerAccumulated > 0);
+
+    const navigationUpdate = setTimeout(() => {
+      if (hasUnsavedTimer && timerRunID !== requestedRunID) {
+        setConfirmation({ type: 'switch_run', nextRunID: requestedRunID });
+        return;
+      }
+
+      if (!timerRunIsActive && timerRunID) {
+        setTimerRunID(null);
+        setTimerStartedAt(null);
+        setTimerAccumulated(0);
+      }
+      setSelectedRunID(requestedRunID);
+      setDraftValue(null);
+      setNote('');
+    }, 0);
+
+    return () => clearTimeout(navigationUpdate);
+  }, [currentRun?.id, requestedRunID, runs.data, selectionRequest, timerAccumulated, timerRunID, timerStartedAt]);
 
   useEffect(() => {
     if (!userID || !runs.data) return;
     const storageKey = `bookgyeol.reading-timer.${userID}`;
     try {
       const timerRunExists = timerRunID && runs.data.some(
-        (run) => run.id === timerRunID && (run.status === 'reading' || run.status === 'paused'),
+        (run) => run.id === timerRunID && run.status === 'reading',
       );
       if (!timerRunExists || (timerStartedAt === null && timerAccumulated === 0)) {
         globalThis.localStorage?.removeItem(storageKey);
@@ -341,7 +382,7 @@ export default function RecordScreen() {
         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <View style={[styles.bookPanel, { backgroundColor: theme.primarySoft }]}>
             <View style={styles.bookRow}>
-              <BookCover title={currentRun.title} color={currentRun.coverColor} />
+              <BookCover title={currentRun.title} color={currentRun.coverColor} coverUrl={currentRun.coverUrl} />
               <View style={styles.bookInfo}>
                 <View style={styles.readingLabelRow}>
                   <View style={[styles.readingDot, { backgroundColor: theme.accent }]} />
@@ -366,7 +407,7 @@ export default function RecordScreen() {
             <View style={[styles.timerCard, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
               <View>
                 <Text style={[styles.timerEyebrow, { color: theme.textSecondary }]}>독서 타이머</Text>
-                <Text accessibilityLiveRegion="polite" style={[styles.timerValue, { color: theme.text }]}>{timerLabel}</Text>
+                <Text accessibilityLabel={`독서 시간 ${timerLabel}`} style={[styles.timerValue, { color: theme.text }]}>{timerLabel}</Text>
               </View>
               <View style={styles.timerActions}>
                 {activeTimerStartedAt === null && elapsedSeconds > 0 ? (

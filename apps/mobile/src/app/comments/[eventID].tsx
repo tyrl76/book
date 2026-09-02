@@ -1,8 +1,9 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Screen } from '@/components/product/screen';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Radius, Spacing } from '@/constants/theme';
 import { useFeedback } from '@/features/feedback/feedback-provider';
@@ -34,6 +35,7 @@ export default function CommentsScreen() {
   const report = useCreateReport();
   const [body, setBody] = useState('');
   const [policy, setPolicy] = useState<FeedComment['revealPolicy']>('after_position');
+  const [reportTarget, setReportTarget] = useState<string | null>(null);
 
   const submit = async () => {
     const message = body.trim();
@@ -43,6 +45,18 @@ export default function CommentsScreen() {
       setBody('');
     } catch (error) {
       feedback.showError('한마디를 남기지 못했어요', error, { label: '다시 시도', onPress: () => void submit() });
+    }
+  };
+
+  const submitReport = async () => {
+    if (!reportTarget || report.isPending) return;
+    try {
+      await report.mutateAsync({ targetType: 'comment', targetId: reportTarget, reason: 'spoiler' });
+      setReportTarget(null);
+      feedback.showSuccess('신고를 접수했어요', '확인 후 필요한 조치를 진행합니다.');
+    } catch (error) {
+      setReportTarget(null);
+      feedback.showError('신고를 접수하지 못했어요', error);
     }
   };
 
@@ -73,21 +87,10 @@ export default function CommentsScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`${comment.authorNickname}님의 댓글 신고`}
-                onPress={() => Alert.alert('이 댓글을 신고할까요?', undefined, [
-                  { text: '취소', style: 'cancel' },
-                  {
-                    text: '스포일러 신고',
-                    style: 'destructive',
-                    onPress: () => report.mutate(
-                      { targetType: 'comment', targetId: comment.id, reason: 'spoiler' },
-                      {
-                        onSuccess: () => feedback.showSuccess('신고를 접수했어요', '확인 후 필요한 조치를 진행합니다.'),
-                        onError: (error) => feedback.showError('신고를 접수하지 못했어요', error),
-                      },
-                    ),
-                  },
-                ])}
-                style={styles.reportButton}>
+                accessibilityState={{ disabled: report.isPending }}
+                disabled={report.isPending}
+                onPress={() => setReportTarget(comment.id)}
+                style={[styles.reportButton, { opacity: report.isPending ? 0.5 : 1 }]}>
                 <Text style={[styles.reportText, { color: theme.textSecondary }]}>신고</Text>
               </Pressable>
             </View>
@@ -151,6 +154,15 @@ export default function CommentsScreen() {
           <Text style={[styles.submitText, { color: body.trim() ? theme.inverse : theme.textSecondary }]}>{create.isPending ? '남기는 중…' : '한마디 남기기'}</Text>
         </Pressable>
       </View>
+      <ConfirmDialog
+        visible={Boolean(reportTarget)}
+        title="이 댓글을 신고할까요?"
+        confirmLabel="스포일러 신고"
+        pending={report.isPending}
+        pendingLabel="신고 접수 중…"
+        onCancel={() => setReportTarget(null)}
+        onConfirm={() => void submitReport()}
+      />
     </Screen>
   );
 }

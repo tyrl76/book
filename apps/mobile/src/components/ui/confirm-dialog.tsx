@@ -6,10 +6,11 @@ import { useTheme } from '@/hooks/use-theme';
 type ConfirmDialogProps = {
   visible: boolean;
   title: string;
-  message: string;
+  message?: string;
   confirmLabel?: string;
   cancelLabel?: string;
   pending?: boolean;
+  pendingLabel?: string;
   onCancel: () => void;
   onConfirm: () => void;
 };
@@ -21,6 +22,7 @@ export function ConfirmDialog({
   confirmLabel = '확인',
   cancelLabel = '취소',
   pending = false,
+  pendingLabel = '처리 중…',
   onCancel,
   onConfirm,
 }: ConfirmDialogProps) {
@@ -48,7 +50,7 @@ export function ConfirmDialog({
           style={[styles.dialog, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <View style={styles.copy}>
             <Text style={[styles.title, { color: theme.text }]}>{title}</Text>
-            <Text style={[styles.message, { color: theme.textSecondary }]}>{message}</Text>
+            {message ? <Text style={[styles.message, { color: theme.textSecondary }]}>{message}</Text> : null}
           </View>
           <View style={styles.actions}>
             <Pressable
@@ -71,7 +73,7 @@ export function ConfirmDialog({
                 { backgroundColor: theme.accent, opacity: pressed || pending ? 0.58 : 1 },
               ]}>
               <Text style={[styles.buttonText, { color: theme.inverse }]}>
-                {pending ? '삭제 중…' : confirmLabel}
+                {pending ? pendingLabel : confirmLabel}
               </Text>
             </Pressable>
           </View>

@@ -2,14 +2,28 @@ import { StyleSheet, View } from 'react-native';
 
 import { useTheme } from '@/hooks/use-theme';
 
-export function ProgressBar({ value }: { value: number }) {
+type ProgressBarProps = {
+  value: number;
+  accessibilityLabel?: string;
+};
+
+export function ProgressBar({ value, accessibilityLabel = '독서 진척률' }: ProgressBarProps) {
   const theme = useTheme();
+  const progress = Math.max(0, Math.min(100, value));
+  const roundedProgress = Math.round(progress);
+
   return (
-    <View style={[styles.track, { backgroundColor: theme.backgroundElement }]}>
+    <View
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="progressbar"
+      accessibilityValue={{ min: 0, max: 100, now: roundedProgress, text: `${roundedProgress}%` }}
+      style={[styles.track, { backgroundColor: theme.backgroundElement }]}>
       <View
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
         style={[
           styles.fill,
-          { backgroundColor: theme.primary, width: `${Math.max(0, Math.min(100, value))}%` },
+          { backgroundColor: theme.primary, width: `${progress}%` },
         ]}
       />
     </View>

@@ -1,10 +1,11 @@
 import * as Clipboard from 'expo-clipboard';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Share, StyleSheet, Text, View } from 'react-native';
 
 import { ProgressBar } from '@/components/product/progress-bar';
 import { Screen } from '@/components/product/screen';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Radius, Spacing } from '@/constants/theme';
 import { useFeedback } from '@/features/feedback/feedback-provider';
@@ -25,6 +26,7 @@ export default function GroupDetailScreen() {
   const invite = useCreateGroupInvite(groupID ?? '');
   const leave = useLeaveGroup();
   const [activeInvite, setActiveInvite] = useState<FriendInvite | null>(null);
+  const [leaveDialogVisible, setLeaveDialogVisible] = useState(false);
 
   const getInvite = async (fresh = false) => {
     if (activeInvite && !fresh) return activeInvite;
@@ -52,14 +54,19 @@ export default function GroupDetailScreen() {
     }
   };
 
-  const leaveGroup = () => {
-    Alert.alert(group?.role === 'owner' ? '그룹을 삭제할까요?' : '그룹에서 나갈까요?', group?.role === 'owner' ? '다른 멤버가 있으면 먼저 그룹을 정리해야 합니다.' : '다시 참여하려면 새 초대가 필요합니다.', [
-      { text: '취소', style: 'cancel' },
-      { text: group?.role === 'owner' ? '삭제' : '나가기', style: 'destructive', onPress: async () => {
-        try { await leave.mutateAsync(groupID ?? ''); router.back(); }
-        catch (error) { feedback.showError('그룹을 정리하지 못했어요', error, { label: '다시 확인', onPress: leaveGroup }); }
-      } },
-    ]);
+  const leaveGroup = async () => {
+    if (!groupID || leave.isPending) return;
+    try {
+      await leave.mutateAsync(groupID);
+      setLeaveDialogVisible(false);
+      router.back();
+    } catch (error) {
+      setLeaveDialogVisible(false);
+      feedback.showError('그룹을 정리하지 못했어요', error, {
+        label: '다시 확인',
+        onPress: () => setLeaveDialogVisible(true),
+      });
+    }
   };
 
   return (
@@ -92,7 +99,24 @@ export default function GroupDetailScreen() {
           </View>
         ))}
       </View>
-      <Pressable accessibilityRole="button" onPress={leaveGroup} style={styles.leaveButton}><Text style={[styles.leaveText, { color: theme.accent }]}>{group?.role === 'owner' ? '그룹 삭제' : '그룹 나가기'}</Text></Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ disabled: leave.isPending }}
+        disabled={leave.isPending}
+        onPress={() => setLeaveDialogVisible(true)}
+        style={[styles.leaveButton, { opacity: leave.isPending ? 0.5 : 1 }]}>
+        <Text style={[styles.leaveText, { color: theme.accent }]}>{group?.role === 'owner' ? '그룹 삭제' : '그룹 나가기'}</Text>
+      </Pressable>
+      <ConfirmDialog
+        visible={leaveDialogVisible}
+        title={group?.role === 'owner' ? '그룹을 삭제할까요?' : '그룹에서 나갈까요?'}
+        message={group?.role === 'owner' ? '다른 멤버가 있으면 먼저 그룹을 정리해야 합니다.' : '다시 참여하려면 새 초대가 필요합니다.'}
+        confirmLabel={group?.role === 'owner' ? '삭제' : '나가기'}
+        pending={leave.isPending}
+        pendingLabel={group?.role === 'owner' ? '삭제 중…' : '나가는 중…'}
+        onCancel={() => setLeaveDialogVisible(false)}
+        onConfirm={() => void leaveGroup()}
+      />
     </Screen>
   );
 }

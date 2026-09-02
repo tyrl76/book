@@ -1247,7 +1247,11 @@ components:
         type:
           type: string
           enum: [started, milestone_25, milestone_50, milestone_75, finished, shared_note]
-        normalizedProgress: { type: integer, minimum: 0, maximum: 10000 }
+        normalizedProgress:
+          type: integer
+          minimum: -1
+          maximum: 10000
+          description: 0~10000은 0~100%의 정규화 진척도이며, -1은 작성자가 피드 진척 공개를 숨긴 경우의 센티널 값이다.
         note: { type: string }
         reactionCount: { type: integer, minimum: 0 }
         reactedByViewer: { type: boolean }

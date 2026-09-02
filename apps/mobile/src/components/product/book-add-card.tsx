@@ -1,4 +1,3 @@
-import { Image } from 'expo-image';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -43,6 +42,7 @@ export function BookAddCard({
   const theme = useTheme();
   const [basis, setBasis] = useState<ReadingRun['progressBasis']>(book.pageCount ? 'pages' : 'percent');
   const [amount, setAmount] = useState(book.pageCount ? String(book.pageCount) : '100');
+  const [expanded, setExpanded] = useState(compact);
   const numericAmount = Number(amount);
   const requiresAmount = basis !== 'percent';
   const amountValid = !requiresAmount || (Number.isInteger(numericAmount) && numericAmount > 0 && numericAmount <= (basis === 'pages' ? 100_000 : 16_666));
@@ -60,11 +60,7 @@ export function BookAddCard({
   return (
     <View style={[styles.card, compact && styles.compact, { backgroundColor: theme.card, borderColor: theme.border }]}>
       <View style={styles.bookRow}>
-        {book.coverUrl ? (
-          <Image source={book.coverUrl} contentFit="cover" transition={150} style={styles.cover} />
-        ) : (
-          <BookCover title={book.title} color="#42624C" small />
-        )}
+        <BookCover title={book.title} color="#42624C" coverUrl={book.coverUrl} small />
         <View style={styles.info}>
           <Text numberOfLines={2} style={[styles.title, { color: theme.text }]}>{book.title}</Text>
           <Text numberOfLines={1} style={[styles.meta, { color: theme.textSecondary }]}>{book.author || '저자 미상'}</Text>
@@ -104,24 +100,56 @@ export function BookAddCard({
             </Pressable>
           </View>
         </View>
+      ) : !expanded ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${book.title} 추가 옵션 펼치기`}
+          accessibilityState={{ expanded: false }}
+          onPress={() => setExpanded(true)}
+          style={({ pressed }) => [
+            styles.expandButton,
+            { backgroundColor: theme.primarySoft, borderColor: theme.border, opacity: pressed ? 0.68 : 1 },
+          ]}>
+          <View style={styles.expandCopy}>
+            <Text style={[styles.expandTitle, { color: theme.primary }]}>＋ 추가 옵션</Text>
+            <Text style={[styles.expandHint, { color: theme.textSecondary }]}>읽을 상태와 책 형식을 선택해요</Text>
+          </View>
+          <Text style={[styles.expandArrow, { color: theme.primary }]}>⌄</Text>
+        </Pressable>
       ) : (
         <>
+          <View style={styles.optionHeading}>
+            <View style={styles.optionHeadingCopy}>
+              <Text style={[styles.optionTitle, { color: theme.text }]}>책장에 어떻게 추가할까요?</Text>
+              <Text style={[styles.optionHint, { color: theme.textSecondary }]}>책 형식과 전체 분량을 먼저 확인해 주세요.</Text>
+            </View>
+            {!compact ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${book.title} 추가 옵션 접기`}
+                accessibilityState={{ expanded: true }}
+                onPress={() => setExpanded(false)}
+                style={({ pressed }) => [styles.collapseButton, { opacity: pressed ? 0.55 : 1 }]}>
+                <Text style={[styles.collapseText, { color: theme.textSecondary }]}>접기</Text>
+              </Pressable>
+            ) : null}
+          </View>
 
-      <View accessibilityRole="radiogroup" style={styles.basisRow}>
-        {basisOptions.map((item) => {
-          const selected = basis === item.value;
-          return (
-            <Pressable
-              key={item.value}
-              accessibilityRole="radio"
-              accessibilityState={{ checked: selected }}
-              onPress={() => selectBasis(item.value)}
-              style={[styles.basis, { backgroundColor: selected ? theme.primarySoft : theme.backgroundElement, borderColor: selected ? theme.primary : theme.border }]}>
-              <Text style={[styles.basisText, { color: selected ? theme.primary : theme.textSecondary }]}>{item.label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
+          <View accessibilityRole="radiogroup" style={styles.basisRow}>
+            {basisOptions.map((item) => {
+              const selected = basis === item.value;
+              return (
+                <Pressable
+                  key={item.value}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: selected }}
+                  onPress={() => selectBasis(item.value)}
+                  style={[styles.basis, { backgroundColor: selected ? theme.primarySoft : theme.backgroundElement, borderColor: selected ? theme.primary : theme.border }]}>
+                  <Text style={[styles.basisText, { color: selected ? theme.primary : theme.textSecondary }]}>{item.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
 
       {requiresAmount ? (
         <View style={[styles.inputWrap, { borderColor: amountValid ? theme.border : theme.accent }]}>
@@ -194,7 +222,6 @@ const styles = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: 19, padding: 15, gap: 13 },
   compact: { borderWidth: 0, padding: 0 },
   bookRow: { flexDirection: 'row', gap: 13 },
-  cover: { width: 66, height: 96, borderRadius: 7, backgroundColor: '#E7E0D2' },
   info: { flex: 1, justifyContent: 'center', gap: 5 },
   title: { fontSize: 17, lineHeight: 23, fontWeight: '900', letterSpacing: -0.3 },
   meta: { fontSize: 12, lineHeight: 17 },
@@ -207,6 +234,17 @@ const styles = StyleSheet.create({
   existingPrimary: { flex: 1, minHeight: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   existingSecondaryText: { fontSize: 12, fontWeight: '900' },
   existingPrimaryText: { fontSize: 12, fontWeight: '900' },
+  expandButton: { minHeight: 52, borderWidth: 1, borderRadius: 13, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  expandCopy: { flex: 1, gap: 2 },
+  expandTitle: { fontSize: 13, fontWeight: '900' },
+  expandHint: { fontSize: 10, lineHeight: 14 },
+  expandArrow: { fontSize: 18, fontWeight: '900' },
+  optionHeading: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  optionHeadingCopy: { flex: 1, gap: 3 },
+  optionTitle: { fontSize: 14, fontWeight: '900' },
+  optionHint: { fontSize: 10, lineHeight: 14 },
+  collapseButton: { minWidth: 44, minHeight: 44, marginTop: -8, marginRight: -8, alignItems: 'center', justifyContent: 'center' },
+  collapseText: { fontSize: 11, fontWeight: '800' },
   basisRow: { flexDirection: 'row', gap: 7 },
   basis: { flex: 1, minHeight: 42, borderWidth: 1, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center' },
   basisText: { fontSize: 11, fontWeight: '900' },

@@ -11,7 +11,6 @@ import { useFeedback } from '@/features/feedback/feedback-provider';
 import { useFeed } from '@/features/feed/hooks';
 import { useReadingRuns } from '@/features/reading/hooks';
 import { useFeedReaction, useFriends } from '@/features/social/hooks';
-import { useAuth } from '@/features/auth/auth-provider';
 import { useTheme } from '@/hooks/use-theme';
 import type { FeedEvent } from '@/types/domain';
 
@@ -23,6 +22,14 @@ const milestoneCopy: Record<FeedEvent['type'], string> = {
   finished: '책을 끝까지 읽었어요',
   shared_note: '한 줄 감상을 남겼어요',
 };
+
+function eventCopy(item: FeedEvent) {
+  if (item.normalizedProgress >= 0) return milestoneCopy[item.type];
+  if (item.type === 'started') return '새 책을 읽기 시작했어요';
+  if (item.type === 'finished') return '책을 끝까지 읽었어요';
+  if (item.type === 'shared_note') return '한 줄 감상을 남겼어요';
+  return '독서를 이어가고 있어요';
+}
 
 type FeedFilter = 'all' | 'friends' | 'finished' | 'notes';
 
@@ -44,19 +51,19 @@ function relativeTime(value: string) {
 export default function TogetherScreen() {
   const theme = useTheme();
   const feedback = useFeedback();
-  const { userID } = useAuth();
   const feed = useFeed();
   const friends = useFriends();
   const runs = useReadingRuns();
   const reaction = useFeedReaction();
   const [feedFilter, setFeedFilter] = useState<FeedFilter>('all');
   const events = useMemo(() => feed.data ?? [], [feed.data]);
+  const friendIDs = useMemo(() => new Set((friends.data ?? []).map((friend) => friend.userId)), [friends.data]);
   const filteredEvents = useMemo(() => events.filter((item) => {
-    if (feedFilter === 'friends') return item.actorId !== userID;
+    if (feedFilter === 'friends') return friendIDs.has(item.actorId);
     if (feedFilter === 'finished') return item.type === 'finished';
     if (feedFilter === 'notes') return item.type === 'shared_note' || Boolean(item.note);
     return true;
-  }), [events, feedFilter, userID]);
+  }), [events, feedFilter, friendIDs]);
   const hasFriends = Boolean(friends.data?.length);
   const hasBooks = Boolean(runs.data?.length);
   const liveFriends = (friends.data ?? []).filter((item) => item.readingNow);
@@ -117,39 +124,8 @@ export default function TogetherScreen() {
         </View>
       ) : null}
 
-      <View style={[styles.summary, { backgroundColor: theme.primarySoft, borderColor: theme.border }]}>
-        <View style={styles.summaryCopy}>
-          <View style={styles.summaryTitleRow}>
-            <View style={[styles.liveDot, { backgroundColor: theme.accent }]} />
-            <Text style={[styles.summaryTitle, { color: theme.text }]}>지금 이어지는 독서</Text>
-          </View>
-          <Text style={[styles.summaryText, { color: theme.textSecondary }]}>
-            {liveFriends.length
-              ? `친구 ${liveFriends.length}명이 지금 책을 펼치고 있어요.`
-              : hasFriends
-                ? `연결된 친구 ${friends.data?.length ?? 0}명의 다음 기록을 기다리고 있어요.`
-                : '친구가 독서를 시작하면 여기에 바로 보여요.'}
-          </Text>
-        </View>
-        <View style={[styles.summaryBadge, { backgroundColor: theme.card }]}>
-          <Text style={[styles.summaryBadgeText, { color: theme.primary }]}>{events.length}개 소식</Text>
-        </View>
-      </View>
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="이번 주 함께 읽은 리포트 열기"
-        onPress={() => router.push('/weekly-report')}
-        style={[styles.weeklyLink, { backgroundColor: theme.card, borderColor: theme.border }]}>
-        <View style={styles.weeklyCopy}>
-          <Text style={[styles.weeklyEyebrow, { color: theme.primary }]}>WEEKLY TOGETHER</Text>
-          <Text style={[styles.weeklyTitle, { color: theme.text }]}>이번 주 함께 읽은 순간</Text>
-          <Text style={[styles.weeklyMeta, { color: theme.textSecondary }]}>순위 없이 서로 이어진 시간만 돌아봐요.</Text>
-        </View>
-        <Text style={[styles.weeklyArrow, { color: theme.primary }]}>›</Text>
-      </Pressable>
-
-      <View style={styles.section}>
+      {liveFriends.length || friends.isFetching || friends.isError ? (
+        <View style={styles.section}>
         <View style={styles.sectionHeading}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>지금 읽는 친구</Text>
           <Text style={[styles.sectionMeta, { color: theme.textSecondary }]}>{liveFriends.length}명</Text>
@@ -160,31 +136,37 @@ export default function TogetherScreen() {
           <ActivityIndicator color={theme.primary} />
         ) : liveFriends.length ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.friendList}>
-            {liveFriends.map((item) => (
-              <Pressable
-                key={item.userId}
-                accessibilityRole="button"
-                accessibilityLabel={`${item.nickname}님 독서 프로필 열기`}
-                onPress={() => router.push({ pathname: '/friend/[userID]', params: { userID: item.userId } })}
-                style={styles.friend}>
-                <View style={styles.friendCover}>
-                  <BookCover title={item.currentTitle ?? '독서 중'} color={theme.primary} small />
-                  <View style={[styles.progressBadge, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                    <Text style={[styles.progressBadgeText, { color: theme.primary }]}>
-                      {Math.round((item.normalizedProgress ?? 0) / 100)}%
-                    </Text>
+            {liveFriends.map((item) => {
+              const progressLabel = item.normalizedProgress === undefined
+                ? '진척도 비공개'
+                : `${Math.round(item.normalizedProgress / 100)}%`;
+              return (
+                <Pressable
+                  key={item.userId}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${item.nickname}님, ${item.currentTitle ?? '독서 중'}, ${progressLabel}, 독서 프로필 열기`}
+                  onPress={() => router.push({ pathname: '/friend/[userID]', params: { userID: item.userId } })}
+                  style={styles.friend}>
+                  <View style={styles.friendCover}>
+                    <BookCover title={item.currentTitle ?? '독서 중'} color={theme.primary} small />
+                    <View style={[styles.progressBadge, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                      <Text style={[styles.progressBadgeText, { color: item.normalizedProgress === undefined ? theme.textSecondary : theme.primary }]}>
+                        {item.normalizedProgress === undefined ? '비공개' : progressLabel}
+                      </Text>
+                    </View>
                   </View>
-                </View>
-                <Text numberOfLines={1} style={[styles.friendName, { color: theme.text }]}>{item.nickname}</Text>
-              </Pressable>
-            ))}
+                  <Text numberOfLines={1} style={[styles.friendName, { color: theme.text }]}>{item.nickname}</Text>
+                </Pressable>
+              );
+            })}
           </ScrollView>
         ) : (
           <View style={[styles.emptyInline, { backgroundColor: theme.backgroundElement }]}>
             <Text style={[styles.emptyInlineText, { color: theme.textSecondary }]}>지금 책을 펼친 친구는 없어요. 기록은 아래에서 볼 수 있어요.</Text>
           </View>
         )}
-      </View>
+        </View>
+      ) : null}
 
       <View style={styles.section}>
         <View style={styles.sectionHeading}>
@@ -224,18 +206,24 @@ export default function TogetherScreen() {
                   <Text style={[styles.actor, { color: theme.text }]}>{item.actorNickname}</Text>
                   <Text style={[styles.caption, { color: theme.textSecondary }]}>{relativeTime(item.occurredAt)}</Text>
                 </View>
-                <View style={[styles.percentPill, { backgroundColor: theme.backgroundElement }]}>
-                  <Text style={[styles.percentPillText, { color: theme.primary }]}>{Math.round(item.normalizedProgress / 100)}%</Text>
-                </View>
+                {item.normalizedProgress >= 0 ? (
+                  <View style={[styles.percentPill, { backgroundColor: theme.backgroundElement }]}>
+                    <Text style={[styles.percentPillText, { color: theme.primary }]}>{Math.round(item.normalizedProgress / 100)}%</Text>
+                  </View>
+                ) : null}
               </View>
 
               <View style={styles.bookRow}>
-                <BookCover title={item.title} color={item.coverColor} small />
+                <BookCover title={item.title} color={item.coverColor} coverUrl={item.coverUrl} small />
                 <View style={styles.bookInfo}>
-                  <Text style={[styles.eventCopy, { color: theme.text }]}>{milestoneCopy[item.type]}</Text>
+                  <Text style={[styles.eventCopy, { color: theme.text }]}>{eventCopy(item)}</Text>
                   <Text numberOfLines={2} style={[styles.bookTitle, { color: theme.text }]}>{item.title}</Text>
                   <Text style={[styles.caption, { color: theme.textSecondary }]}>{item.author}</Text>
-                  <ProgressBar value={item.normalizedProgress / 100} />
+                  {item.normalizedProgress >= 0 ? (
+                    <ProgressBar value={item.normalizedProgress / 100} />
+                  ) : (
+                    <Text style={[styles.hiddenProgress, { color: theme.textSecondary }]}>진척도 비공개</Text>
+                  )}
                 </View>
               </View>
 
@@ -249,9 +237,12 @@ export default function TogetherScreen() {
                 <View style={styles.footerActions}>
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityState={{ selected: item.reactedByViewer, disabled: reaction.isPending }}
+                    accessibilityState={{
+                      selected: item.reactedByViewer,
+                      disabled: reaction.isPending && reaction.variables?.eventID === item.id,
+                    }}
                     accessibilityLabel={`${item.actorNickname}님에게 응원 ${item.reactedByViewer ? '취소' : '보내기'}`}
-                    disabled={reaction.isPending}
+                    disabled={reaction.isPending && reaction.variables?.eventID === item.id}
                     onPress={() => {
                       const input = { eventID: item.id, active: !item.reactedByViewer };
                       reaction.mutate(input, {
@@ -272,7 +263,6 @@ export default function TogetherScreen() {
                     <Text style={[styles.footerMeta, { color: theme.textSecondary }]}>한마디 {item.commentCount ?? 0}</Text>
                   </Pressable>
                 </View>
-                <Text style={[styles.footerMeta, { color: theme.textSecondary }]}>친구에게 공개됨</Text>
               </View>
             </View>
           ))}
@@ -311,6 +301,18 @@ export default function TogetherScreen() {
       {feed.isFetching && feed.data ? (
         <Text style={[styles.refreshing, { color: theme.textSecondary }]}>새 소식을 확인하는 중…</Text>
       ) : null}
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="이번 주 함께 읽은 리포트 열기"
+        onPress={() => router.push('/weekly-report')}
+        style={[styles.weeklyLink, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <View style={styles.weeklyCopy}>
+          <Text style={[styles.weeklyEyebrow, { color: theme.primary }]}>WEEKLY TOGETHER</Text>
+          <Text style={[styles.weeklyTitle, { color: theme.text }]}>이번 주 함께 읽은 순간</Text>
+        </View>
+        <Text style={[styles.weeklyArrow, { color: theme.primary }]}>›</Text>
+      </Pressable>
     </Screen>
   );
 }
@@ -332,19 +334,10 @@ const styles = StyleSheet.create({
   activationText: { fontSize: 12, lineHeight: 18, opacity: 0.84 },
   activationButton: { minWidth: 78, minHeight: 46, borderRadius: Radius.medium, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 13 },
   activationButtonText: { fontSize: 13, fontWeight: '900' },
-  summary: { borderWidth: 1, borderRadius: Radius.large, padding: Spacing.three, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  summaryCopy: { flex: 1, gap: 4 },
-  summaryTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  liveDot: { width: 7, height: 7, borderRadius: 4 },
-  summaryTitle: { fontSize: 15, fontWeight: '900' },
-  summaryText: { fontSize: 12, lineHeight: 17 },
-  summaryBadge: { borderRadius: Radius.pill, paddingHorizontal: 10, paddingVertical: 7 },
-  summaryBadgeText: { fontSize: 10, fontWeight: '900' },
-  weeklyLink: { minHeight: 88, borderWidth: 1, borderRadius: Radius.large, padding: Spacing.three, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  weeklyLink: { minHeight: 64, borderWidth: 1, borderRadius: Radius.large, paddingHorizontal: Spacing.three, paddingVertical: 11, flexDirection: 'row', alignItems: 'center', gap: 12 },
   weeklyCopy: { flex: 1 },
   weeklyEyebrow: { fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
   weeklyTitle: { marginTop: 3, fontSize: 15, fontWeight: '900' },
-  weeklyMeta: { marginTop: 4, fontSize: 11 },
   weeklyArrow: { fontSize: 29, fontWeight: '500' },
   section: { gap: Spacing.three },
   sectionHeading: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
@@ -374,6 +367,7 @@ const styles = StyleSheet.create({
   bookRow: { flexDirection: 'row', gap: Spacing.three },
   bookInfo: { flex: 1, justifyContent: 'center', gap: 5 },
   eventCopy: { fontSize: 14, fontWeight: '700' },
+  hiddenProgress: { fontSize: 11, fontWeight: '700' },
   bookTitle: { fontSize: 18, lineHeight: 23, fontWeight: '900', letterSpacing: -0.4 },
   note: { padding: 13, borderRadius: Radius.small, borderLeftWidth: 3 },
   noteText: { fontSize: 14, lineHeight: 21 },

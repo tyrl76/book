@@ -80,15 +80,20 @@ export function FeedbackProvider({ children }: PropsWithChildren) {
               {item.action ? (
                 <Pressable
                   accessibilityRole="button"
+                  accessibilityLabel={`${item.title}: ${item.action.label}`}
                   onPress={() => {
                     dismiss();
                     item.action?.onPress();
                   }}
-                  style={[styles.action, { backgroundColor: theme.primarySoft }]}>
+                  style={({ pressed }) => [styles.action, { backgroundColor: theme.primarySoft, opacity: pressed ? 0.62 : 1 }]}>
                   <Text style={[styles.actionText, { color: theme.primary }]}>{item.action.label}</Text>
                 </Pressable>
               ) : null}
-              <Pressable accessibilityRole="button" accessibilityLabel="메시지 닫기" onPress={dismiss} style={styles.close}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${item.title} 메시지 닫기`}
+                onPress={dismiss}
+                style={({ pressed }) => [styles.close, { opacity: pressed ? 0.54 : 1 }]}>
                 <Text style={[styles.closeText, { color: theme.textSecondary }]}>×</Text>
               </Pressable>
             </View>
@@ -123,7 +128,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.medium,
     paddingVertical: 13,
     paddingLeft: Spacing.three,
-    paddingRight: 48,
+    paddingRight: 56,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
@@ -135,8 +140,8 @@ const styles = StyleSheet.create({
   copy: { flex: 1, gap: 3 },
   title: { fontSize: 14, fontWeight: '900', lineHeight: 19 },
   message: { fontSize: 12, lineHeight: 18 },
-  action: { minHeight: 40, borderRadius: Radius.small, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
+  action: { minWidth: 44, minHeight: 44, borderRadius: Radius.small, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
   actionText: { fontSize: 12, fontWeight: '900' },
-  close: { position: 'absolute', top: 8, right: 8, width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  close: { position: 'absolute', top: 4, right: 4, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   closeText: { fontSize: 24, lineHeight: 28 },
 });

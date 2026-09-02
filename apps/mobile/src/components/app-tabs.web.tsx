@@ -26,6 +26,9 @@ export default function AppTabs() {
           <TabTrigger name="record" href="/record" asChild>
             <TabButton>기록</TabButton>
           </TabTrigger>
+          <TabTrigger name="people" href="/people" asChild>
+            <TabButton>친구</TabButton>
+          </TabTrigger>
           <TabTrigger name="me" href="/me" asChild>
             <TabButton>나</TabButton>
           </TabTrigger>
@@ -37,7 +40,7 @@ export default function AppTabs() {
 
 export function TabButton({ children, isFocused, ...props }: TabTriggerSlotProps) {
   const label = String(children);
-  const icon = label === '함께' ? '◉' : label === '기록' ? '▤' : '●';
+  const icon = label === '함께' ? '◉' : label === '기록' ? '▤' : label === '친구' ? '◎' : '●';
 
   return (
     <Pressable
@@ -83,7 +86,7 @@ const styles = StyleSheet.create({
   },
   innerContainer: {
     width: '100%',
-    maxWidth: 360,
+    maxWidth: 430,
     minHeight: 68,
     padding: 6,
     borderRadius: Radius.xlarge,

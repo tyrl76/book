@@ -3,6 +3,7 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { AppErrorBoundary } from '@/components/ui/app-error-boundary';
 import { Colors } from '@/constants/theme';
@@ -74,6 +75,17 @@ function AppStack() {
   const { resolvedScheme } = useThemeSelection();
   const colors = Colors[resolvedScheme];
 
+  if (auth.loading) {
+    return (
+      <View
+        accessibilityLabel="로그인 정보 확인 중"
+        accessibilityRole="progressbar"
+        style={[styles.authLoading, { backgroundColor: colors.background }]}>
+        <ActivityIndicator color={colors.primary} />
+      </View>
+    );
+  }
+
   return (
     <>
       <SyncOnResume />
@@ -119,3 +131,11 @@ function AppStack() {
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  authLoading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});

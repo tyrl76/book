@@ -10,6 +10,7 @@ import { useBookByISBN, useCreateReadingRun } from '@/features/catalog/hooks';
 import { useFeedback } from '@/features/feedback/feedback-provider';
 import { useTheme } from '@/hooks/use-theme';
 import { ApiError } from '@/lib/api';
+import { nextReadingSelectionRequest } from '@/lib/navigation';
 import type { ReadingRun } from '@/types/domain';
 
 export default function ScanScreen() {
@@ -36,13 +37,18 @@ export default function ScanScreen() {
   ) => {
     if (!isbn) return;
     try {
-      await create.mutateAsync({ isbn, totalValue, progressBasis, status });
+      const createdRun = await create.mutateAsync({ isbn, totalValue, progressBasis, status });
       const isReading = status === 'reading';
       const isImported = status === 'finished';
       feedback.showSuccess(isReading ? '읽는 책에 추가했어요' : isImported ? '읽은 책으로 등록했어요' : '읽고 싶은 책에 담았어요',
         isImported ? '과거 독서 이력으로 저장해 오늘 통계와 피드에는 포함하지 않았어요.' : undefined, {
         label: isReading ? '기록하기' : '책장 보기',
-        onPress: () => router.dismissTo(isReading ? '/record' : '/library'),
+        onPress: () => isReading
+          ? router.dismissTo({
+            pathname: '/record',
+            params: { runID: createdRun.id, selectionRequest: nextReadingSelectionRequest() },
+          })
+          : router.dismissTo('/library'),
       });
     } catch (error) {
       const message = error instanceof ApiError && error.status === 409 ? '이미 책장에 등록된 책입니다.' : error instanceof Error ? error.message : '책을 추가하지 못했습니다.';

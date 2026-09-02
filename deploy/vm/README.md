@@ -61,7 +61,7 @@ https://34-64-97-191.sslip.io/download/bookgyeol-latest.apk
 PC에서 새 APK를 빌드한 다음 저장소 루트에서 게시 스크립트를 실행한다.
 
 ```powershell
-.\deploy\vm\publish-android.ps1 -ApkPath .\bin\bookgyeol-android-v1.0.0-4.apk
+.\deploy\vm\publish-android.ps1 -ApkPath .\bin\bookgyeol-android-v1.0.0-<versionCode>.apk
 ```
 
 스크립트는 APK의 패키지명, 버전 증가, 기존 앱과 동일한 서명 지문을 확인하고 서버의 파일을 원자적으로 교체한 다음 HTTPS 응답까지 검증한다. Android는 낮거나 같은 `versionCode`의 APK를 업데이트로 거부할 수 있으므로 새 빌드마다 `apps/mobile/app.json`의 `expo.android.versionCode`를 증가시킨다. 앱 서명 키도 기존 버전과 같아야 하며, 서명이 달라지면 설치된 앱 위에 업데이트할 수 없다.

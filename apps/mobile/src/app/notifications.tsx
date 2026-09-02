@@ -10,12 +10,11 @@ import { disablePushTokens } from '@/lib/api';
 import { enablePushNotifications } from '@/lib/push-notifications';
 import type { NotificationPreferences } from '@/types/domain';
 
-const items: { key: keyof Pick<NotificationPreferences, 'pushEnabled' | 'friendRequests' | 'comments' | 'milestones' | 'dailyDigest'>; label: string; description: string }[] = [
+const items: { key: keyof Pick<NotificationPreferences, 'pushEnabled' | 'friendRequests' | 'comments' | 'milestones'>; label: string; description: string }[] = [
   { key: 'pushEnabled', label: '푸시 알림', description: '기기에서 책결 알림을 받을 수 있게 해요' },
   { key: 'friendRequests', label: '친구 연결', description: '초대 수락과 새 연결을 바로 알려줘요' },
   { key: 'comments', label: '응원과 한마디', description: '내 기록에 새 반응이 생기면 알려줘요' },
   { key: 'milestones', label: '친구 마일스톤', description: '친구의 중요한 독서 지점만 알려줘요' },
-  { key: 'dailyDigest', label: '하루 한 번 모아보기', description: '일반 독서 소식을 묶어서 조용히 보내요' },
 ];
 
 export default function NotificationsScreen() {

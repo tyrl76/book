@@ -1,8 +1,9 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Screen } from '@/components/product/screen';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Radius, Spacing } from '@/constants/theme';
 import { useDeleteUserData, useExportUserData, useStorageStatus } from '@/features/account/hooks';
@@ -21,6 +22,7 @@ export default function AccountDataScreen() {
   const pendingCount = usePendingCount();
   const failedCount = useFailedCount();
   const [confirmation, setConfirmation] = useState('');
+  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
 
   const shareExport = async () => {
     try {
@@ -33,22 +35,20 @@ export default function AccountDataScreen() {
 
   const removeAccount = () => {
     if (confirmation !== '계정 삭제') return;
-    Alert.alert('정말 계정을 삭제할까요?', '책결 서버의 프로필, 독서 기록, 댓글과 친구 관계가 삭제되며 복구할 수 없습니다.', [
-      { text: '취소', style: 'cancel' },
-      {
-        text: '영구 삭제',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteData.mutateAsync();
-            await auth.signOut();
-            router.replace('/sign-in');
-          } catch (error) {
-            feedback.showError('계정을 삭제하지 못했어요', error, { label: '다시 확인', onPress: removeAccount });
-          }
-        },
-      },
-    ]);
+    setDeleteDialogVisible(true);
+  };
+
+  const confirmRemoveAccount = async () => {
+    if (confirmation !== '계정 삭제' || deleteData.isPending) return;
+    try {
+      await deleteData.mutateAsync();
+      setDeleteDialogVisible(false);
+      await auth.signOut();
+      router.replace('/sign-in');
+    } catch (error) {
+      setDeleteDialogVisible(false);
+      feedback.showError('계정을 삭제하지 못했어요', error, { label: '다시 확인', onPress: removeAccount });
+    }
   };
 
   return (
@@ -68,7 +68,7 @@ export default function AccountDataScreen() {
           <View style={[styles.statusDot, { backgroundColor: storageStatus.data?.connected ? theme.primary : theme.accent }]} />
           <View style={styles.statusCopy}>
             <Text style={[styles.cardTitle, { color: theme.text }]}>
-              {storageStatus.data?.connected ? 'PostgreSQL에 저장 중' : '저장소 연결 확인 필요'}
+              {storageStatus.data?.connected ? '서버에 안전하게 저장 중' : '저장소 연결 확인 필요'}
             </Text>
             <Text style={[styles.accountEmail, { color: theme.textSecondary }]}>{auth.session?.user.email}</Text>
           </View>
@@ -127,8 +127,18 @@ export default function AccountDataScreen() {
 
       <View style={[styles.notice, { backgroundColor: theme.backgroundElement }]}>
         <Text style={[styles.noticeTitle, { color: theme.text }]}>개인 서버 계정</Text>
-        <Text style={[styles.noticeCopy, { color: theme.textSecondary }]}>한 개의 계정만 가입할 수 있으며 비밀번호 원문과 로그인 토큰 원문은 서버 DB에 저장되지 않습니다. 계정을 삭제하면 다시 첫 계정을 만들 수 있어요.</Text>
+        <Text style={[styles.noticeCopy, { color: theme.textSecondary }]}>관리자가 이 개인 서버에 테스트 계정을 추가할 수 있어요. 계정별 비밀번호 원문과 로그인 토큰 원문은 저장하지 않고 검증용 해시만 안전하게 보관합니다.</Text>
       </View>
+      <ConfirmDialog
+        visible={deleteDialogVisible}
+        title="정말 계정을 삭제할까요?"
+        message="책결 서버의 프로필, 독서 기록, 댓글과 친구 관계가 삭제되며 복구할 수 없습니다."
+        confirmLabel="영구 삭제"
+        pending={deleteData.isPending}
+        pendingLabel="삭제 중…"
+        onCancel={() => setDeleteDialogVisible(false)}
+        onConfirm={() => void confirmRemoveAccount()}
+      />
     </Screen>
   );
 }
